@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="ka">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>სასკოლო კალენდრის ავტომატური შემდგენი</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="workspace">
+        <aside class="sidebar">
+          <div>
+            <p class="eyebrow">სკოლის განრიგი</p>
+            <h1>კალენდრის ავტომატური შემდგენი</h1>
+          </div>
+
+          <nav class="step-list" aria-label="ნავიგაცია">
+            <button class="step-button active" data-panel="classesPanel">კლასები</button>
+            <button class="step-button" data-panel="timingPanel">სმენები და დრო</button>
+            <button class="step-button" data-panel="teachersPanel">მასწავლებლები</button>
+            <button class="step-button" data-panel="generatePanel">გენერაცია</button>
+          </nav>
+
+          <div class="status-card">
+            <span id="summaryClasses">0 კლასი</span>
+            <span id="summaryTeachers">0 მასწავლებელი</span>
+            <span id="summarySubjects">0 საგანი</span>
+          </div>
+        </aside>
+
+        <section class="content">
+          <div id="messages" class="messages"></div>
+
+          <section class="panel active" id="classesPanel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">ნაბიჯი 1</p>
+                <h2>კლასები და საგნები</h2>
+                <p class="panel-help">ჯერ მიუთითე კლასი, შემდეგ დაამატე საგნები და რამდენჯერ ჩატარდება თითოეული კვირაში.</p>
+              </div>
+            </div>
+
+            <div class="form-grid class-form">
+              <label>
+                კლასი
+                <input id="classGrade" type="number" min="1" max="12" value="1" />
+              </label>
+              <label>
+                ქვეკლასი
+                <input id="classSection" type="text" maxlength="2" placeholder="არასავალდებულო" />
+              </label>
+              <label>
+                სმენა
+                <select id="classShift">
+                  <option value="1">პირველი</option>
+                  <option value="2">მეორე</option>
+                  <option value="3">მესამე</option>
+                </select>
+              </label>
+              <fieldset class="lesson-range">
+                <legend>დღიური დატვირთვა</legend>
+                <div class="range-row">
+                  <label class="mini-field">
+                    მინ.
+                    <input id="classMinLessons" type="number" min="1" max="10" value="4" />
+                  </label>
+                  <span class="range-separator">-</span>
+                  <label class="mini-field">
+                    მაქს.
+                    <input id="classMaxLessons" type="number" min="1" max="10" value="6" />
+                  </label>
+                </div>
+                <p id="lessonRangePreview" class="range-preview">დღეში 4-6 გაკვეთილი</p>
+              </fieldset>
+              <div class="subject-builder">
+                საგნები და კვირაში რაოდენობა
+                <p class="field-help">საგნის დამატების შემდეგ რიცხვით მიუთითე, კვირაში რამდენი გაკვეთილი უნდა ჩატარდეს.</p>
+                <div class="inline-entry">
+                  <input id="subjectDraft" type="text" placeholder="საგნის სახელი" />
+                  <button type="button" id="addSubjectBtn">დამატება</button>
+                </div>
+                <div class="subject-presets" aria-label="საგნების სწრაფი არჩევა">
+                  <button type="button" data-subject-preset="ქართული">ქართული</button>
+                  <button type="button" data-subject-preset="მათემატიკა">მათემატიკა</button>
+                  <button type="button" data-subject-preset="ინგლისური">ინგლისური</button>
+                  <button type="button" data-subject-preset="ბუნება">ბუნება</button>
+                  <button type="button" data-subject-preset="ისტორია">ისტორია</button>
+                </div>
+                <div id="subjectChips" class="chips lesson-subjects"></div>
+              </div>
+            </div>
+
+            <div class="form-submit-row">
+              <div>
+                <h3>ყველაფერი მზადაა?</h3>
+                <p>თუ კლასი, სმენა, დღიური დატვირთვა და საგნები სწორად არის მითითებული, დაამატე კლასი სიაში.</p>
+              </div>
+              <div class="submit-buttons">
+                <button type="button" id="cancelClassEditBtn" class="hidden">გაუქმება</button>
+                <button class="primary" id="addClassBtn">+ კლასის დამატება</button>
+              </div>
+            </div>
+
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>კლასი</th>
+                    <th>სმენა</th>
+                    <th>დღიური დატვირთვა</th>
+                    <th>საგნები</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="classesTable"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="panel" id="timingPanel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">ნაბიჯი 2</p>
+                <h2>სმენები, გაკვეთილები და დასვენება</h2>
+                <p class="panel-help">თუ სკოლას მხოლოდ ერთი სმენა აქვს, გამორთე მეორე და მესამე. დროები ჩაწერე 24-საათიანად, მაგალითად 09:00.</p>
+              </div>
+            </div>
+
+            <fieldset class="shift-toggle-panel">
+              <legend>სკოლაში არსებული სმენები</legend>
+              <label class="toggle-row fixed">
+                <input type="checkbox" checked disabled />
+                <span>პირველი სმენა</span>
+              </label>
+              <label class="toggle-row">
+                <input id="shift2Enabled" type="checkbox" checked data-shift-toggle="2" />
+                <span>მეორე სმენა</span>
+              </label>
+              <label class="toggle-row">
+                <input id="shift3Enabled" type="checkbox" checked data-shift-toggle="3" />
+                <span>მესამე სმენა</span>
+              </label>
+            </fieldset>
+
+            <div class="form-grid timing-grid">
+              <label>
+                პირველი სმენის დაწყება
+                <input id="shift1Start" class="time-24" type="text" inputmode="numeric" pattern="[0-2][0-9]:[0-5][0-9]" value="09:00" placeholder="09:00" />
+              </label>
+              <label data-shift-setting="2">
+                მეორე სმენის დაწყება
+                <input id="shift2Start" class="time-24" type="text" inputmode="numeric" pattern="[0-2][0-9]:[0-5][0-9]" value="14:00" placeholder="14:00" />
+              </label>
+              <label data-shift-setting="3">
+                მესამე სმენის დაწყება
+                <input id="shift3Start" class="time-24" type="text" inputmode="numeric" pattern="[0-2][0-9]:[0-5][0-9]" value="18:00" placeholder="18:00" />
+              </label>
+              <label>
+                გაკვეთილის ხანგრძლივობა
+                <input id="lessonDuration" type="number" min="20" max="90" value="45" />
+              </label>
+              <label>
+                დასვენება
+                <input id="breakDuration" type="number" min="0" max="40" value="10" />
+              </label>
+            </div>
+
+            <fieldset class="break-mode-panel">
+              <legend>დასვენების დრო</legend>
+              <div class="segmented-control" role="radiogroup" aria-label="დასვენების დროის რეჟიმი">
+                <label>
+                  <input type="radio" name="breakMode" value="constant" checked />
+                  <span>ყველა დასვენება ერთნაირია</span>
+                </label>
+                <label>
+                  <input type="radio" name="breakMode" value="custom" />
+                  <span>დასვენებები განსხვავდება</span>
+                </label>
+              </div>
+              <div id="customBreakPanel" class="custom-break-panel hidden">
+                <label>
+                  დასვენებები გაკვეთილების შემდეგ
+                  <input id="customBreaks" type="text" value="5, 10, 5, 10, 5" placeholder="მაგ: 5, 10, 5, 15" />
+                </label>
+                <p>მაგალითად: 5, 10, 5 ნიშნავს 5 წუთს პირველი გაკვეთილის შემდეგ, 10 წუთს მეორის შემდეგ, 5 წუთს მესამის შემდეგ.</p>
+              </div>
+            </fieldset>
+          </section>
+
+          <section class="panel" id="teachersPanel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">ნაბიჯი 3</p>
+                <h2>მასწავლებლები და თავისუფალი დრო</h2>
+                <p class="panel-help">შეიყვანე მასწავლებელი, მონიშნე მისი საგნები, კლასები და როდის შეუძლია გაკვეთილის ჩატარება.</p>
+              </div>
+            </div>
+
+            <div class="form-grid">
+              <label>
+                სახელი და გვარი
+                <input id="teacherName" type="text" value="ნინო მასწავლებელი" />
+              </label>
+              <div class="subject-builder teacher-subject-builder">
+                საგნები
+                <p class="field-help">დაამატე საგანი და თითოეულ საგანთან მონიშნე, რომელ კლასებს ასწავლის.</p>
+                <div class="inline-entry">
+                  <input id="teacherSubjectDraft" type="text" placeholder="საგნის სახელი" />
+                  <button type="button" id="addTeacherSubjectBtn">დამატება</button>
+                </div>
+                <div class="subject-presets" aria-label="მასწავლებლის საგნების სწრაფი არჩევა">
+                  <button type="button" data-teacher-subject-preset="ქართული">ქართული</button>
+                  <button type="button" data-teacher-subject-preset="მათემატიკა">მათემატიკა</button>
+                  <button type="button" data-teacher-subject-preset="ინგლისური">ინგლისური</button>
+                  <button type="button" data-teacher-subject-preset="ბუნება">ბუნება</button>
+                  <button type="button" data-teacher-subject-preset="ისტორია">ისტორია</button>
+                </div>
+                <div id="teacherSubjectChips" class="chips"></div>
+              </div>
+              <fieldset class="availability-builder">
+                <legend>თავისუფალი დროები</legend>
+                <p class="field-help">აირჩიე დღე და დრო. თუ იმავე დღეს კიდევ სხვა დროსაც სცალია, დაამატე მეორე შუალედიც.</p>
+                <div class="availability-entry">
+                  <label>
+                    დღე
+                    <select id="teacherAvailabilityDay">
+                      <option value="ყველა">ყველა სამუშაო დღე</option>
+                      <option value="ორშაბათი">ორშაბათი</option>
+                      <option value="სამშაბათი">სამშაბათი</option>
+                      <option value="ოთხშაბათი">ოთხშაბათი</option>
+                      <option value="ხუთშაბათი">ხუთშაბათი</option>
+                      <option value="პარასკევი">პარასკევი</option>
+                    </select>
+                  </label>
+                  <label>
+                    საათიდან
+                    <input id="teacherAvailabilityFrom" class="time-24" type="text" inputmode="numeric" pattern="[0-2][0-9]:[0-5][0-9]" value="09:00" placeholder="09:00" />
+                  </label>
+                  <label>
+                    საათამდე
+                    <input id="teacherAvailabilityTo" class="time-24" type="text" inputmode="numeric" pattern="[0-2][0-9]:[0-5][0-9]" value="17:00" placeholder="17:00" />
+                  </label>
+                  <button type="button" id="addTeacherAvailabilityBtn">დროის დამატება</button>
+                </div>
+                <div id="teacherAvailabilityList" class="availability-list"></div>
+              </fieldset>
+            </div>
+
+            <div class="form-submit-row">
+              <div>
+                <h3>მასწავლებელი მზადაა?</h3>
+                <p>თუ სახელი, საგნები, კლასები და თავისუფალი დრო სწორია, დაამატე მასწავლებელი სიაში.</p>
+              </div>
+              <div class="submit-buttons">
+                <button type="button" id="cancelTeacherEditBtn" class="hidden">გაუქმება</button>
+                <button class="primary" id="addTeacherBtn">+ მასწავლებლის დამატება</button>
+              </div>
+            </div>
+
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>მასწავლებელი</th>
+                    <th>საგნები</th>
+                    <th>კლასები</th>
+                    <th>თავისუფალია</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="teachersTable"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="panel" id="generatePanel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">ნაბიჯი 4</p>
+                <h2>გენერირებული ცხრილი</h2>
+                <p class="panel-help">ჯერ შეგიძლია სატესტო მონაცემები ჩატვირთო, შემდეგ ცხრილი დააგენერირო.</p>
+              </div>
+            </div>
+
+            <div class="generate-actions">
+              <div>
+                <h3>ცხრილის შექმნა</h3>
+                <p>თუ მონაცემები ჯერ არ შეგიყვანია, დააჭირე სატესტო მონაცემებს. ეს ჩატვირთავს რამდენიმე კლასს და მასწავლებელს.</p>
+              </div>
+              <div class="actions">
+                <button id="seedBtn">სატესტო მონაცემები</button>
+                <button class="primary" id="generateBtn">ცხრილის გენერაცია</button>
+                <button class="danger" id="clearAllBtn">ყველაფრის გასუფთავება</button>
+              </div>
+            </div>
+
+            <div id="variantPicker" class="variant-picker hidden"></div>
+            <div id="scheduleOutput" class="schedule-output"></div>
+          </section>
+        </section>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
