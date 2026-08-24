@@ -11,6 +11,8 @@ const state = {
   ],
   selectedTeacherSubjects: [{ name: "ქართული", classes: [] }],
   selectedTeacherAvailability: DAYS.map((day) => ({ day, from: "09:00", to: "17:00" })),
+  selectedBulkClasses: [],
+  classSectionShifts: {},
   generatedVariants: [],
   selectedVariantIndex: 0,
   editingClassIndex: null,
@@ -65,6 +67,9 @@ function collectFormDraft() {
     classMinLessons: $("classMinLessons").value,
     classMaxLessons: $("classMaxLessons").value,
     subjectDraft: $("subjectDraft").value,
+    subjectSourceClass: $("subjectSourceClass").value,
+    bulkSubjectName: $("bulkSubjectName").value,
+    bulkSubjectWeekly: $("bulkSubjectWeekly").value,
     shift2Enabled: $("shift2Enabled").checked,
     shift3Enabled: $("shift3Enabled").checked,
     shift1Start: $("shift1Start").value,
@@ -92,6 +97,8 @@ function persistDraft() {
     selectedSubjects: state.selectedSubjects,
     selectedTeacherSubjects: state.selectedTeacherSubjects,
     selectedTeacherAvailability: state.selectedTeacherAvailability,
+    selectedBulkClasses: state.selectedBulkClasses,
+    classSectionShifts: state.classSectionShifts,
     generatedVariants: state.generatedVariants,
     selectedVariantIndex: state.selectedVariantIndex,
     editingClassIndex: state.editingClassIndex,
@@ -124,6 +131,8 @@ function restoreSavedDraft() {
     state.selectedTeacherAvailability = Array.isArray(payload.selectedTeacherAvailability)
       ? payload.selectedTeacherAvailability
       : state.selectedTeacherAvailability;
+    state.selectedBulkClasses = Array.isArray(payload.selectedBulkClasses) ? payload.selectedBulkClasses : [];
+    state.classSectionShifts = payload.classSectionShifts && typeof payload.classSectionShifts === "object" ? payload.classSectionShifts : {};
     state.teachers = state.teachers.map(migrateTeacherAvailability);
     state.generatedVariants = Array.isArray(payload.generatedVariants)
       ? payload.generatedVariants.filter((variant) => variant.unresolved?.length === 0 && variant.dailyShortages?.length === 0)
@@ -138,6 +147,9 @@ function restoreSavedDraft() {
     $("classMinLessons").value = form.classMinLessons ?? $("classMinLessons").value;
     $("classMaxLessons").value = form.classMaxLessons ?? $("classMaxLessons").value;
     $("subjectDraft").value = form.subjectDraft ?? "";
+    $("subjectSourceClass").value = form.subjectSourceClass ?? "";
+    $("bulkSubjectName").value = form.bulkSubjectName ?? "";
+    $("bulkSubjectWeekly").value = form.bulkSubjectWeekly ?? "3";
     $("shift2Enabled").checked = form.shift2Enabled ?? $("shift2Enabled").checked;
     $("shift3Enabled").checked = form.shift3Enabled ?? $("shift3Enabled").checked;
     $("shift1Start").value = form.shift1Start ?? $("shift1Start").value;
@@ -188,6 +200,62 @@ function className(grade, section) {
   return `${grade}${section.trim()}`;
 }
 
+function parseClassSections(value) {
+  const sections = value
+    .split(/[,،]/)
+    .map((section) => section.trim())
+    .filter(Boolean);
+  return sections.length > 0 ? Array.from(new Set(sections)) : [""];
+}
+
+function suggestedNextSection(section) {
+  const sections = ["ა", "ბ", "გ", "დ", "ე", "ვ", "ზ", "თ"];
+  const currentIndex = sections.indexOf(section.trim());
+  return currentIndex >= 0 && currentIndex < sections.length - 1 ? sections[currentIndex + 1] : "ა";
+}
+
+function renderSectionShiftOptions() {
+  const sections = parseClassSections($("classSection").value);
+  const isBatch = sections.length > 1 && state.editingClassIndex === null;
+  $("sectionShiftPanel").classList.toggle("hidden", !isBatch);
+  if (!isBatch) {
+    $("sectionShiftOptions").innerHTML = "";
+    return;
+  }
+
+  const activeShifts = getActiveShifts();
+  const shiftLabels = { 1: "პირველი სმენა", 2: "მეორე სმენა", 3: "მესამე სმენა" };
+  const currentSections = new Set(sections);
+  Object.keys(state.classSectionShifts).forEach((section) => {
+    if (!currentSections.has(section)) delete state.classSectionShifts[section];
+  });
+
+  $("sectionShiftOptions").innerHTML = sections
+    .map((section) => {
+      const savedShift = state.classSectionShifts[section];
+      const selectedShift = activeShifts.includes(savedShift) ? savedShift : $("classShift").value;
+      return `
+        <label class="section-shift-row">
+          <span>${className($("classGrade").value, section)}</span>
+          <select data-section-shift="${section}">
+            ${activeShifts
+              .map(
+                (shift) => `<option value="${shift}" ${shift === selectedShift ? "selected" : ""}>${shiftLabels[shift]}</option>`,
+              )
+              .join("")}
+          </select>
+        </label>
+      `;
+    })
+    .join("");
+}
+
+function getClassShiftForSection(section) {
+  const activeShifts = getActiveShifts();
+  const savedShift = state.classSectionShifts[section];
+  return activeShifts.includes(savedShift) ? savedShift : $("classShift").value;
+}
+
 function addSubject(subject) {
   const normalized = subject.trim();
   if (!normalized) return;
@@ -217,6 +285,112 @@ function renderSubjectChips() {
       `,
     )
     .join("");
+}
+
+function renderSubjectSourceOptions() {
+  const select = $("subjectSourceClass");
+  const currentValue = select.value;
+
+  if (state.classes.length === 0) {
+    select.innerHTML = `<option value="">ჯერ დაამატე კლასი</option>`;
+    select.disabled = true;
+    $("copySubjectsBtn").disabled = true;
+    return;
+  }
+
+  select.disabled = false;
+  $("copySubjectsBtn").disabled = false;
+  select.innerHTML = `
+    <option value="">აირჩიე კლასი</option>
+    ${state.classes.map((classItem, index) => `<option value="${index}">${classItem.name}</option>`).join("")}
+  `;
+  select.value = state.classes[currentValue] ? currentValue : "";
+}
+
+function copySubjectsFromClass() {
+  const index = Number($("subjectSourceClass").value);
+  const classItem = state.classes[index];
+
+  if (!classItem) {
+    showMessages([{ type: "error", text: "საგნების გადმოსატანად ჯერ აირჩიე კლასი." }]);
+    return;
+  }
+
+  state.selectedSubjects = classItem.subjects.map((subject) => ({ ...subject }));
+  renderSubjectChips();
+  showMessages([{ type: "ok", text: `${classItem.name} კლასის საგნები გადმოტანილია.` }]);
+  persistDraft();
+}
+
+function clearSelectedSubjects() {
+  state.selectedSubjects = [];
+  renderSubjectChips();
+  persistDraft();
+}
+
+function renderBulkClassOptions() {
+  const validClassNames = new Set(state.classes.map((classItem) => classItem.name));
+  state.selectedBulkClasses = state.selectedBulkClasses.filter((className) => validClassNames.has(className));
+
+  if (state.classes.length === 0) {
+    $("bulkClassOptions").innerHTML = `<p class="empty-note">ჯერ დაამატე კლასები.</p>`;
+    $("selectAllBulkClassesBtn").disabled = true;
+    $("addBulkSubjectBtn").disabled = true;
+    return;
+  }
+
+  $("selectAllBulkClassesBtn").disabled = false;
+  $("addBulkSubjectBtn").disabled = false;
+  $("selectAllBulkClassesBtn").textContent =
+    state.selectedBulkClasses.length === state.classes.length ? "მონიშვნის მოხსნა" : "ყველას მონიშვნა";
+  $("bulkClassOptions").innerHTML = state.classes
+    .map(
+      (classItem) => `
+        <label class="class-option">
+          <input type="checkbox" value="${classItem.name}" data-bulk-class ${
+            state.selectedBulkClasses.includes(classItem.name) ? "checked" : ""
+          } />
+          <span>${classItem.name}</span>
+        </label>
+      `,
+    )
+    .join("");
+}
+
+function toggleAllBulkClasses() {
+  state.selectedBulkClasses =
+    state.selectedBulkClasses.length === state.classes.length ? [] : state.classes.map((classItem) => classItem.name);
+  renderBulkClassOptions();
+  persistDraft();
+}
+
+function addSubjectToSelectedClasses() {
+  const name = $("bulkSubjectName").value.trim();
+  const weeklyLessons = Number($("bulkSubjectWeekly").value);
+
+  if (!name || !Number.isFinite(weeklyLessons) || weeklyLessons < 1) {
+    showMessages([{ type: "error", text: "მიუთითე საგნის სახელი და სწორი კვირეული რაოდენობა." }]);
+    return;
+  }
+
+  if (state.selectedBulkClasses.length === 0) {
+    showMessages([{ type: "error", text: "მონიშნე მინიმუმ ერთი კლასი." }]);
+    return;
+  }
+
+  state.classes.forEach((classItem) => {
+    if (!state.selectedBulkClasses.includes(classItem.name)) return;
+    const existingSubject = classItem.subjects.find((subject) => subject.name.toLowerCase() === name.toLowerCase());
+    if (existingSubject) existingSubject.weeklyLessons = weeklyLessons;
+    else classItem.subjects.push({ name, weeklyLessons });
+  });
+
+  const updatedCount = state.selectedBulkClasses.length;
+  $("bulkSubjectName").value = "";
+  state.selectedBulkClasses = [];
+  renderClasses();
+  showMessages([{ type: "ok", text: `${name} დაემატა ${updatedCount} კლასს.` }]);
+  persistDraft();
 }
 
 function addTeacherSubject(subject) {
@@ -338,6 +512,7 @@ function updateShiftAvailability() {
     input.disabled = !enabled;
     wrapper.classList.toggle("disabled", !enabled);
   });
+  renderSectionShiftOptions();
 }
 
 function updateBreakMode() {
@@ -397,6 +572,7 @@ function resetClassForm() {
   $("classShift").value = "1";
   $("classMinLessons").value = "4";
   $("classMaxLessons").value = "6";
+  state.classSectionShifts = {};
   state.selectedSubjects = [
     { name: "ქართული", weeklyLessons: 7 },
     { name: "მათემატიკა", weeklyLessons: 7 },
@@ -429,6 +605,8 @@ function clearAllData() {
   localStorage.removeItem(STORAGE_KEY);
   state.classes = [];
   state.teachers = [];
+  state.selectedBulkClasses = [];
+  state.classSectionShifts = {};
   state.generatedVariants = [];
   state.selectedVariantIndex = 0;
   resetClassForm();
@@ -458,6 +636,7 @@ function renderClasses() {
           <td>
             <div class="row-actions">
               <button type="button" data-edit-class="${index}">შეცვლა</button>
+              <button type="button" data-duplicate-class="${index}">დუბლირება</button>
               <button class="danger" type="button" data-remove-class="${index}">წაშლა</button>
             </div>
           </td>
@@ -466,6 +645,8 @@ function renderClasses() {
     )
     .join("");
   updateSummary();
+  renderSubjectSourceOptions();
+  renderBulkClassOptions();
   renderTeacherClassOptions();
 }
 
@@ -506,11 +687,10 @@ function renderTeachers() {
 
 function addClass() {
   const grade = $("classGrade").value.trim();
-  const section = $("classSection").value.trim();
+  const sections = parseClassSections($("classSection").value);
   const subjects = state.selectedSubjects.map((subject) => ({ ...subject }));
   const minLessonsPerDay = Number($("classMinLessons").value);
   const maxLessonsPerDay = Number($("classMaxLessons").value);
-  const name = className(grade, section);
 
   if (!grade || subjects.length === 0) {
     showMessages([{ type: "error", text: "კლასის დამატებისთვის შეავსე კლასი და დაამატე მინიმუმ ერთი საგანი." }]);
@@ -522,8 +702,8 @@ function addClass() {
     return;
   }
 
-  if (state.classes.some((item, index) => item.name === name && index !== state.editingClassIndex)) {
-    showMessages([{ type: "error", text: `${name} უკვე დამატებულია.` }]);
+  if (state.editingClassIndex !== null && sections.length > 1) {
+    showMessages([{ type: "error", text: "რედაქტირებისას მხოლოდ ერთი ქვეკლასი მიუთითე." }]);
     return;
   }
 
@@ -532,17 +712,29 @@ function addClass() {
     return;
   }
 
-  const classData = {
-    name,
+  const classItems = sections.map((section) => ({
+    name: className(grade, section),
     grade,
     section,
-    shift: $("classShift").value,
+    shift: getClassShiftForSection(section),
     minLessonsPerDay,
     maxLessonsPerDay,
-    subjects,
-  };
+    subjects: subjects.map((subject) => ({ ...subject })),
+  }));
+
+  const duplicateNames = classItems
+    .filter((classItem) =>
+      state.classes.some((item, index) => item.name === classItem.name && index !== state.editingClassIndex),
+    )
+    .map((classItem) => classItem.name);
+  if (duplicateNames.length > 0) {
+    showMessages([{ type: "error", text: `${duplicateNames.join(", ")} უკვე დამატებულია.` }]);
+    return;
+  }
 
   if (state.editingClassIndex !== null) {
+    const classData = classItems[0];
+    const name = classData.name;
     const oldName = state.classes[state.editingClassIndex].name;
     state.classes[state.editingClassIndex] = classData;
     if (oldName !== name) {
@@ -555,11 +747,54 @@ function addClass() {
     showMessages([{ type: "ok", text: `${name} განახლდა.` }]);
     setClassEditingMode(null);
   } else {
-    state.classes.push(classData);
+    state.classes.push(...classItems);
+    showMessages([
+      {
+        type: "ok",
+        text:
+          classItems.length > 1
+            ? `${classItems.map((classItem) => classItem.name).join(", ")} კლასები ერთად დაემატა.`
+            : `${classItems[0].name} დაემატა.`,
+      },
+    ]);
   }
 
   renderClasses();
   renderTeachers();
+  persistDraft();
+}
+
+function duplicateClass(index) {
+  const source = state.classes[index];
+  if (!source) return;
+
+  const section = window.prompt(
+    `${source.name} კლასის ასლისთვის მიუთითე ახალი ქვეკლასი:`,
+    suggestedNextSection(source.section),
+  );
+  if (section === null) return;
+
+  const normalizedSection = section.trim();
+  if (!normalizedSection || normalizedSection.includes(",") || normalizedSection.includes("،")) {
+    showMessages([{ type: "error", text: "დუბლირებისთვის მიუთითე ერთი ქვეკლასი, მაგალითად ბ." }]);
+    return;
+  }
+
+  const name = className(source.grade, normalizedSection);
+  if (state.classes.some((classItem) => classItem.name === name)) {
+    showMessages([{ type: "error", text: `${name} უკვე დამატებულია.` }]);
+    return;
+  }
+
+  state.classes.splice(index + 1, 0, {
+    ...source,
+    name,
+    section: normalizedSection,
+    subjects: source.subjects.map((subject) => ({ ...subject })),
+  });
+  renderClasses();
+  renderTeachers();
+  showMessages([{ type: "ok", text: `${source.name}-ის ასლი შეიქმნა როგორც ${name}.` }]);
   persistDraft();
 }
 
@@ -616,6 +851,7 @@ function editClass(index) {
   $("classMinLessons").value = item.minLessonsPerDay;
   $("classMaxLessons").value = item.maxLessonsPerDay;
   state.selectedSubjects = item.subjects.map((subject) => ({ ...subject }));
+  state.classSectionShifts = {};
   setClassEditingMode(index);
   renderSubjectChips();
   updateLessonRangePreview();
@@ -1162,6 +1398,10 @@ $("generateBtn").addEventListener("click", generateSchedule);
 $("seedBtn").addEventListener("click", seedData);
 $("clearAllBtn").addEventListener("click", clearAllData);
 $("addSubjectBtn").addEventListener("click", () => addSubject($("subjectDraft").value));
+$("copySubjectsBtn").addEventListener("click", copySubjectsFromClass);
+$("clearSubjectsBtn").addEventListener("click", clearSelectedSubjects);
+$("selectAllBulkClassesBtn").addEventListener("click", toggleAllBulkClasses);
+$("addBulkSubjectBtn").addEventListener("click", addSubjectToSelectedClasses);
 $("addTeacherSubjectBtn").addEventListener("click", () => addTeacherSubject($("teacherSubjectDraft").value));
 $("addTeacherAvailabilityBtn").addEventListener("click", addTeacherAvailability);
 $("classMinLessons").addEventListener("input", () => {
@@ -1172,6 +1412,12 @@ $("classMaxLessons").addEventListener("input", () => {
   updateLessonRangePreview();
   persistDraft();
 });
+$("classSection").addEventListener("input", () => {
+  renderSectionShiftOptions();
+  persistDraft();
+});
+$("classGrade").addEventListener("input", renderSectionShiftOptions);
+$("classShift").addEventListener("change", renderSectionShiftOptions);
 $("subjectDraft").addEventListener("keydown", (event) => {
   if (event.key !== "Enter") return;
   event.preventDefault();
@@ -1255,10 +1501,35 @@ $("teacherAvailabilityList").addEventListener("click", (event) => {
   persistDraft();
 });
 
+$("bulkClassOptions").addEventListener("change", (event) => {
+  if (!event.target.matches("[data-bulk-class]")) return;
+
+  if (event.target.checked) {
+    if (!state.selectedBulkClasses.includes(event.target.value)) state.selectedBulkClasses.push(event.target.value);
+  } else {
+    state.selectedBulkClasses = state.selectedBulkClasses.filter((className) => className !== event.target.value);
+  }
+  renderBulkClassOptions();
+  persistDraft();
+});
+
+$("sectionShiftOptions").addEventListener("change", (event) => {
+  const section = event.target.dataset.sectionShift;
+  if (section === undefined) return;
+  state.classSectionShifts[section] = event.target.value;
+  persistDraft();
+});
+
 $("classesTable").addEventListener("click", (event) => {
   const editIndex = event.target.dataset.editClass;
   if (editIndex !== undefined) {
     editClass(Number(editIndex));
+    return;
+  }
+
+  const duplicateIndex = event.target.dataset.duplicateClass;
+  if (duplicateIndex !== undefined) {
+    duplicateClass(Number(duplicateIndex));
     return;
   }
 

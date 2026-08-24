@@ -439,6 +439,13 @@ label {
   font-weight: 600;
 }
 
+.input-help {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
 .subject-builder {
   display: grid;
   grid-column: 1 / -1;
@@ -483,6 +490,82 @@ label {
   background: #f8fafc;
   border-radius: 8px;
   font-weight: 700;
+}
+
+.subject-copy-panel {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) 140px 190px;
+  gap: 10px;
+  align-items: end;
+  max-width: 760px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfdff;
+}
+
+.subject-copy-panel button {
+  min-height: 54px;
+}
+
+.bulk-subject-panel {
+  display: grid;
+  gap: 16px;
+  margin-top: 28px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfdff;
+}
+
+.bulk-subject-heading,
+.bulk-subject-submit {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.bulk-subject-heading h3 {
+  margin: 0 0 5px;
+  font-size: 22px;
+}
+
+.bulk-subject-heading p,
+.bulk-subject-submit p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.bulk-subject-entry {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) 150px;
+  gap: 12px;
+  max-width: 620px;
+}
+
+.bulk-class-picker {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.bulk-class-picker legend {
+  padding: 0 4px;
+  color: var(--muted);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.bulk-subject-submit {
+  padding-top: 2px;
 }
 
 .chip {
@@ -582,6 +665,55 @@ select:focus {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fbfdff;
+}
+
+.section-shift-panel {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #bdd4f6;
+  border-radius: 8px;
+  background: var(--brand-soft);
+}
+
+.section-shift-panel strong {
+  color: var(--brand-strong);
+  font-size: 18px;
+}
+
+.section-shift-panel p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.section-shift-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.section-shift-row {
+  display: grid;
+  grid-template-columns: auto minmax(150px, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid #cfe0f8;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.section-shift-row > span {
+  min-width: 38px;
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.section-shift-row select {
+  min-height: 46px;
 }
 
 .lesson-range legend {
@@ -1020,11 +1152,28 @@ tr:last-child td {
   .segmented-control,
   .day-picker,
   .availability-entry,
+  .subject-copy-panel,
+  .bulk-subject-entry,
   .class-options {
     grid-template-columns: 1fr;
   }
 
+  .bulk-subject-heading,
+  .bulk-subject-submit {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .bulk-subject-heading button,
+  .bulk-subject-submit button {
+    width: 100%;
+  }
+
   .subject-builder {
+    grid-column: auto;
+  }
+
+  .section-shift-panel {
     grid-column: auto;
   }
 

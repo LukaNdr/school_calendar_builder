@@ -47,8 +47,9 @@
                 <input id="classGrade" type="number" min="1" max="12" value="1" />
               </label>
               <label>
-                ქვეკლასი
-                <input id="classSection" type="text" maxlength="2" placeholder="არასავალდებულო" />
+                ქვეკლასი / ქვეკლასები
+                <input id="classSection" type="text" maxlength="40" placeholder="მაგ. ა ან ა, ბ, გ" />
+                <span class="input-help">რამდენიმე ერთნაირი კლასის შესაქმნელად ქვეკლასები გამოყავი მძიმით.</span>
               </label>
               <label>
                 სმენა
@@ -73,6 +74,13 @@
                 </div>
                 <p id="lessonRangePreview" class="range-preview">დღეში 4-6 გაკვეთილი</p>
               </fieldset>
+              <div id="sectionShiftPanel" class="section-shift-panel hidden">
+                <div>
+                  <strong>ქვეკლასების სმენები</strong>
+                  <p>საჭიროების შემთხვევაში თითოეულ ქვეკლასს ცალკე სმენა მიუთითე.</p>
+                </div>
+                <div id="sectionShiftOptions" class="section-shift-options"></div>
+              </div>
               <div class="subject-builder">
                 საგნები და კვირაში რაოდენობა
                 <p class="field-help">საგნის დამატების შემდეგ რიცხვით მიუთითე, კვირაში რამდენი გაკვეთილი უნდა ჩატარდეს.</p>
@@ -86,6 +94,16 @@
                   <button type="button" data-subject-preset="ინგლისური">ინგლისური</button>
                   <button type="button" data-subject-preset="ბუნება">ბუნება</button>
                   <button type="button" data-subject-preset="ისტორია">ისტორია</button>
+                </div>
+                <div class="subject-copy-panel">
+                  <label>
+                    საგნების გადმოტანა სხვა კლასიდან
+                    <select id="subjectSourceClass">
+                      <option value="">ჯერ დაამატე კლასი</option>
+                    </select>
+                  </label>
+                  <button type="button" id="copySubjectsBtn">გადმოტანა</button>
+                  <button type="button" id="clearSubjectsBtn">საგნების გასუფთავება</button>
                 </div>
                 <div id="subjectChips" class="chips lesson-subjects"></div>
               </div>
@@ -116,6 +134,34 @@
                 <tbody id="classesTable"></tbody>
               </table>
             </div>
+
+            <section class="bulk-subject-panel">
+              <div class="bulk-subject-heading">
+                <div>
+                  <h3>ერთი საგანი რამდენიმე კლასს</h3>
+                  <p>მიუთითე საგანი, კვირეული რაოდენობა და მონიშნე ყველა კლასი, რომელსაც ეს საგანი უნდა დაემატოს.</p>
+                </div>
+                <button type="button" id="selectAllBulkClassesBtn">ყველას მონიშვნა</button>
+              </div>
+              <div class="bulk-subject-entry">
+                <label>
+                  საგანი
+                  <input id="bulkSubjectName" type="text" placeholder="მაგ. ფიზიკა" />
+                </label>
+                <label>
+                  კვირაში
+                  <input id="bulkSubjectWeekly" type="number" min="1" max="20" value="3" />
+                </label>
+              </div>
+              <fieldset class="bulk-class-picker">
+                <legend>აირჩიე კლასები</legend>
+                <div id="bulkClassOptions" class="class-options"></div>
+              </fieldset>
+              <div class="bulk-subject-submit">
+                <p>თუ საგანი მონიშნულ კლასში უკვე არის, მისი კვირეული რაოდენობა განახლდება.</p>
+                <button type="button" id="addBulkSubjectBtn" class="primary">საგნის დამატება კლასებზე</button>
+              </div>
+            </section>
           </section>
 
           <section class="panel" id="timingPanel">
