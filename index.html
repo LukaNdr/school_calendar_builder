@@ -95,16 +95,6 @@
                   <button type="button" data-subject-preset="ბუნება">ბუნება</button>
                   <button type="button" data-subject-preset="ისტორია">ისტორია</button>
                 </div>
-                <div class="subject-copy-panel">
-                  <label>
-                    საგნების გადმოტანა სხვა კლასიდან
-                    <select id="subjectSourceClass">
-                      <option value="">ჯერ დაამატე კლასი</option>
-                    </select>
-                  </label>
-                  <button type="button" id="copySubjectsBtn">გადმოტანა</button>
-                  <button type="button" id="clearSubjectsBtn">საგნების გასუფთავება</button>
-                </div>
                 <div id="subjectChips" class="chips lesson-subjects"></div>
               </div>
             </div>
@@ -134,34 +124,6 @@
                 <tbody id="classesTable"></tbody>
               </table>
             </div>
-
-            <section class="bulk-subject-panel">
-              <div class="bulk-subject-heading">
-                <div>
-                  <h3>ერთი საგანი რამდენიმე კლასს</h3>
-                  <p>მიუთითე საგანი, კვირეული რაოდენობა და მონიშნე ყველა კლასი, რომელსაც ეს საგანი უნდა დაემატოს.</p>
-                </div>
-                <button type="button" id="selectAllBulkClassesBtn">ყველას მონიშვნა</button>
-              </div>
-              <div class="bulk-subject-entry">
-                <label>
-                  საგანი
-                  <input id="bulkSubjectName" type="text" placeholder="მაგ. ფიზიკა" />
-                </label>
-                <label>
-                  კვირაში
-                  <input id="bulkSubjectWeekly" type="number" min="1" max="20" value="3" />
-                </label>
-              </div>
-              <fieldset class="bulk-class-picker">
-                <legend>აირჩიე კლასები</legend>
-                <div id="bulkClassOptions" class="class-options"></div>
-              </fieldset>
-              <div class="bulk-subject-submit">
-                <p>თუ საგანი მონიშნულ კლასში უკვე არის, მისი კვირეული რაოდენობა განახლდება.</p>
-                <button type="button" id="addBulkSubjectBtn" class="primary">საგნის დამატება კლასებზე</button>
-              </div>
-            </section>
           </section>
 
           <section class="panel" id="timingPanel">
@@ -227,7 +189,7 @@
               <div id="customBreakPanel" class="custom-break-panel hidden">
                 <label>
                   დასვენებები გაკვეთილების შემდეგ
-                  <input id="customBreaks" type="text" value="5, 10, 5, 10, 5" placeholder="მაგ: 5, 10, 5, 15" />
+                  <input id="customBreaks" type="text" placeholder="დასვენების წუთები მძიმით გამოყავი" />
                 </label>
                 <p>მაგალითად: 5, 10, 5 ნიშნავს 5 წუთს პირველი გაკვეთილის შემდეგ, 10 წუთს მეორის შემდეგ, 5 წუთს მესამის შემდეგ.</p>
               </div>
@@ -246,7 +208,7 @@
             <div class="form-grid">
               <label>
                 სახელი და გვარი
-                <input id="teacherName" type="text" value="ნინო მასწავლებელი" />
+                <input id="teacherName" type="text" placeholder="სახელი და გვარი" />
               </label>
               <div class="subject-builder teacher-subject-builder">
                 საგნები
@@ -281,11 +243,11 @@
                   </label>
                   <label>
                     საათიდან
-                    <input id="teacherAvailabilityFrom" class="time-24" type="text" inputmode="numeric" pattern="[0-2][0-9]:[0-5][0-9]" value="09:00" placeholder="09:00" />
+                    <input id="teacherAvailabilityFrom" class="time-24" type="text" inputmode="numeric" pattern="[0-2][0-9]:[0-5][0-9]" placeholder="საათი:წუთი" />
                   </label>
                   <label>
                     საათამდე
-                    <input id="teacherAvailabilityTo" class="time-24" type="text" inputmode="numeric" pattern="[0-2][0-9]:[0-5][0-9]" value="17:00" placeholder="17:00" />
+                    <input id="teacherAvailabilityTo" class="time-24" type="text" inputmode="numeric" pattern="[0-2][0-9]:[0-5][0-9]" placeholder="საათი:წუთი" />
                   </label>
                   <button type="button" id="addTeacherAvailabilityBtn">დროის დამატება</button>
                 </div>
@@ -325,17 +287,11 @@
               <div>
                 <p class="eyebrow">ნაბიჯი 4</p>
                 <h2>გენერირებული ცხრილი</h2>
-                <p class="panel-help">ჯერ შეგიძლია სატესტო მონაცემები ჩატვირთო, შემდეგ ცხრილი დააგენერირო.</p>
               </div>
             </div>
 
             <div class="generate-actions">
-              <div>
-                <h3>ცხრილის შექმნა</h3>
-                <p>თუ მონაცემები ჯერ არ შეგიყვანია, დააჭირე სატესტო მონაცემებს. ეს ჩატვირთავს რამდენიმე კლასს და მასწავლებელს.</p>
-              </div>
               <div class="actions">
-                <button id="seedBtn">სატესტო მონაცემები</button>
                 <button class="primary" id="generateBtn">ცხრილის გენერაცია</button>
                 <button class="danger" id="clearAllBtn">ყველაფრის გასუფთავება</button>
               </div>

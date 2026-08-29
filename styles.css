@@ -188,27 +188,9 @@ h2 {
 .generate-actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 20px;
+  justify-content: flex-end;
   max-width: 1020px;
   margin-bottom: 28px;
-  padding: 18px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #fbfdff;
-}
-
-.generate-actions h3 {
-  margin: 0 0 6px;
-  font-size: 22px;
-}
-
-.generate-actions p {
-  max-width: 660px;
-  margin: 0;
-  color: var(--muted);
-  font-size: 16px;
-  line-height: 1.45;
 }
 
 .form-submit-row {
@@ -490,82 +472,6 @@ label {
   background: #f8fafc;
   border-radius: 8px;
   font-weight: 700;
-}
-
-.subject-copy-panel {
-  display: grid;
-  grid-template-columns: minmax(220px, 1fr) 140px 190px;
-  gap: 10px;
-  align-items: end;
-  max-width: 760px;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #fbfdff;
-}
-
-.subject-copy-panel button {
-  min-height: 54px;
-}
-
-.bulk-subject-panel {
-  display: grid;
-  gap: 16px;
-  margin-top: 28px;
-  padding: 20px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #fbfdff;
-}
-
-.bulk-subject-heading,
-.bulk-subject-submit {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-}
-
-.bulk-subject-heading h3 {
-  margin: 0 0 5px;
-  font-size: 22px;
-}
-
-.bulk-subject-heading p,
-.bulk-subject-submit p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 15px;
-  line-height: 1.45;
-}
-
-.bulk-subject-entry {
-  display: grid;
-  grid-template-columns: minmax(240px, 1fr) 150px;
-  gap: 12px;
-  max-width: 620px;
-}
-
-.bulk-class-picker {
-  display: grid;
-  gap: 10px;
-  min-width: 0;
-  margin: 0;
-  padding: 14px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #fff;
-}
-
-.bulk-class-picker legend {
-  padding: 0 4px;
-  color: var(--muted);
-  font-size: 15px;
-  font-weight: 800;
-}
-
-.bulk-subject-submit {
-  padding-top: 2px;
 }
 
 .chip {
@@ -1068,6 +974,30 @@ tr:last-child td {
   border-radius: 8px;
   padding: 12px 14px;
   border: 1px solid var(--line);
+  line-height: 1.5;
+}
+
+.message-title {
+  display: block;
+  margin-bottom: 4px;
+  color: inherit;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.message p {
+  margin: 0;
+}
+
+.message ul {
+  display: grid;
+  gap: 7px;
+  margin: 10px 0 0;
+  padding-left: 24px;
+}
+
+.message li {
+  padding-left: 2px;
 }
 
 .message.ok {
@@ -1086,6 +1016,12 @@ tr:last-child td {
   background: var(--warn-bg);
   color: #8a5a00;
   border-color: #ffe0a3;
+}
+
+.message.info {
+  background: var(--brand-soft);
+  color: var(--brand-strong);
+  border-color: #bdd4f6;
 }
 
 .schedule-output {
@@ -1152,21 +1088,8 @@ tr:last-child td {
   .segmented-control,
   .day-picker,
   .availability-entry,
-  .subject-copy-panel,
-  .bulk-subject-entry,
   .class-options {
     grid-template-columns: 1fr;
-  }
-
-  .bulk-subject-heading,
-  .bulk-subject-submit {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .bulk-subject-heading button,
-  .bulk-subject-submit button {
-    width: 100%;
   }
 
   .subject-builder {

@@ -4,17 +4,14 @@ const STORAGE_KEY = "school-calendar-builder-draft-v1";
 const state = {
   classes: [],
   teachers: [],
-  selectedSubjects: [
-    { name: "ქართული", weeklyLessons: 7 },
-    { name: "მათემატიკა", weeklyLessons: 7 },
-    { name: "ინგლისური", weeklyLessons: 6 },
-  ],
-  selectedTeacherSubjects: [{ name: "ქართული", classes: [] }],
-  selectedTeacherAvailability: DAYS.map((day) => ({ day, from: "09:00", to: "17:00" })),
-  selectedBulkClasses: [],
+  selectedSubjects: [],
+  selectedTeacherSubjects: [],
+  selectedTeacherAvailability: [],
   classSectionShifts: {},
   generatedVariants: [],
   selectedVariantIndex: 0,
+  canLoadMoreVariants: false,
+  generatedConfigSignature: "",
   editingClassIndex: null,
   editingTeacherIndex: null,
 };
@@ -27,6 +24,40 @@ function normalizeList(value) {
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function isLegacyClassExample(subjects) {
+  const examples = [
+    { name: "ქართული", weeklyLessons: 7 },
+    { name: "მათემატიკა", weeklyLessons: 7 },
+    { name: "ინგლისური", weeklyLessons: 6 },
+  ];
+  return (
+    Array.isArray(subjects) &&
+    subjects.length === examples.length &&
+    examples.every(
+      (example, index) =>
+        subjects[index]?.name === example.name && subjects[index]?.weeklyLessons === example.weeklyLessons,
+    )
+  );
+}
+
+function isLegacyTeacherExample(subjects) {
+  return (
+    Array.isArray(subjects) &&
+    subjects.length === 1 &&
+    subjects[0]?.name === "ქართული" &&
+    Array.isArray(subjects[0]?.classes) &&
+    subjects[0].classes.length === 0
+  );
+}
+
+function isLegacyAvailabilityExample(availability) {
+  return (
+    Array.isArray(availability) &&
+    availability.length === DAYS.length &&
+    DAYS.every((day) => availability.some((item) => item.day === day && item.from === "09:00" && item.to === "17:00"))
+  );
 }
 
 function migrateTeacherAvailability(teacher) {
@@ -67,9 +98,6 @@ function collectFormDraft() {
     classMinLessons: $("classMinLessons").value,
     classMaxLessons: $("classMaxLessons").value,
     subjectDraft: $("subjectDraft").value,
-    subjectSourceClass: $("subjectSourceClass").value,
-    bulkSubjectName: $("bulkSubjectName").value,
-    bulkSubjectWeekly: $("bulkSubjectWeekly").value,
     shift2Enabled: $("shift2Enabled").checked,
     shift3Enabled: $("shift3Enabled").checked,
     shift1Start: $("shift1Start").value,
@@ -97,10 +125,11 @@ function persistDraft() {
     selectedSubjects: state.selectedSubjects,
     selectedTeacherSubjects: state.selectedTeacherSubjects,
     selectedTeacherAvailability: state.selectedTeacherAvailability,
-    selectedBulkClasses: state.selectedBulkClasses,
     classSectionShifts: state.classSectionShifts,
     generatedVariants: state.generatedVariants,
     selectedVariantIndex: state.selectedVariantIndex,
+    canLoadMoreVariants: state.canLoadMoreVariants,
+    generatedConfigSignature: state.generatedConfigSignature,
     editingClassIndex: state.editingClassIndex,
     editingTeacherIndex: state.editingTeacherIndex,
     form: collectFormDraft(),
@@ -124,20 +153,32 @@ function restoreSavedDraft() {
 
     state.classes = Array.isArray(payload.classes) ? payload.classes : [];
     state.teachers = Array.isArray(payload.teachers) ? payload.teachers : [];
-    state.selectedSubjects = Array.isArray(payload.selectedSubjects) ? payload.selectedSubjects : state.selectedSubjects;
+    const legacyClassExample = isLegacyClassExample(payload.selectedSubjects);
+    const legacyTeacherExample = isLegacyTeacherExample(payload.selectedTeacherSubjects);
+    const legacyAvailabilityExample = isLegacyAvailabilityExample(payload.selectedTeacherAvailability);
+    state.selectedSubjects = legacyClassExample
+      ? []
+      : Array.isArray(payload.selectedSubjects)
+        ? payload.selectedSubjects
+        : state.selectedSubjects;
     state.selectedTeacherSubjects = Array.isArray(payload.selectedTeacherSubjects)
-      ? payload.selectedTeacherSubjects
+      ? legacyTeacherExample
+        ? []
+        : payload.selectedTeacherSubjects
       : state.selectedTeacherSubjects;
     state.selectedTeacherAvailability = Array.isArray(payload.selectedTeacherAvailability)
-      ? payload.selectedTeacherAvailability
+      ? legacyAvailabilityExample
+        ? []
+        : payload.selectedTeacherAvailability
       : state.selectedTeacherAvailability;
-    state.selectedBulkClasses = Array.isArray(payload.selectedBulkClasses) ? payload.selectedBulkClasses : [];
     state.classSectionShifts = payload.classSectionShifts && typeof payload.classSectionShifts === "object" ? payload.classSectionShifts : {};
     state.teachers = state.teachers.map(migrateTeacherAvailability);
     state.generatedVariants = Array.isArray(payload.generatedVariants)
       ? payload.generatedVariants.filter((variant) => variant.unresolved?.length === 0 && variant.dailyShortages?.length === 0)
       : [];
     state.selectedVariantIndex = Number.isInteger(payload.selectedVariantIndex) ? payload.selectedVariantIndex : 0;
+    state.canLoadMoreVariants = payload.canLoadMoreVariants === true;
+    state.generatedConfigSignature = typeof payload.generatedConfigSignature === "string" ? payload.generatedConfigSignature : "";
     state.editingClassIndex = Number.isInteger(payload.editingClassIndex) ? payload.editingClassIndex : null;
     state.editingTeacherIndex = Number.isInteger(payload.editingTeacherIndex) ? payload.editingTeacherIndex : null;
 
@@ -147,9 +188,6 @@ function restoreSavedDraft() {
     $("classMinLessons").value = form.classMinLessons ?? $("classMinLessons").value;
     $("classMaxLessons").value = form.classMaxLessons ?? $("classMaxLessons").value;
     $("subjectDraft").value = form.subjectDraft ?? "";
-    $("subjectSourceClass").value = form.subjectSourceClass ?? "";
-    $("bulkSubjectName").value = form.bulkSubjectName ?? "";
-    $("bulkSubjectWeekly").value = form.bulkSubjectWeekly ?? "3";
     $("shift2Enabled").checked = form.shift2Enabled ?? $("shift2Enabled").checked;
     $("shift3Enabled").checked = form.shift3Enabled ?? $("shift3Enabled").checked;
     $("shift1Start").value = form.shift1Start ?? $("shift1Start").value;
@@ -157,12 +195,16 @@ function restoreSavedDraft() {
     $("shift3Start").value = form.shift3Start ?? $("shift3Start").value;
     $("lessonDuration").value = form.lessonDuration ?? $("lessonDuration").value;
     $("breakDuration").value = form.breakDuration ?? $("breakDuration").value;
-    $("customBreaks").value = form.customBreaks ?? $("customBreaks").value;
-    $("teacherName").value = form.teacherName ?? $("teacherName").value;
+    $("customBreaks").value = form.customBreaks === "5, 10, 5, 10, 5" ? "" : (form.customBreaks ?? $("customBreaks").value);
+    $("teacherName").value = form.teacherName === "ნინო მასწავლებელი" ? "" : (form.teacherName ?? $("teacherName").value);
     $("teacherSubjectDraft").value = form.teacherSubjectDraft ?? "";
     $("teacherAvailabilityDay").value = form.teacherAvailabilityDay ?? "ყველა";
-    $("teacherAvailabilityFrom").value = form.teacherAvailabilityFrom ?? form.teacherFrom ?? $("teacherAvailabilityFrom").value;
-    $("teacherAvailabilityTo").value = form.teacherAvailabilityTo ?? form.teacherTo ?? $("teacherAvailabilityTo").value;
+    $("teacherAvailabilityFrom").value = legacyAvailabilityExample
+      ? ""
+      : (form.teacherAvailabilityFrom ?? form.teacherFrom ?? $("teacherAvailabilityFrom").value);
+    $("teacherAvailabilityTo").value = legacyAvailabilityExample
+      ? ""
+      : (form.teacherAvailabilityTo ?? form.teacherTo ?? $("teacherAvailabilityTo").value);
 
     const breakMode = form.breakMode === "custom" ? "custom" : "constant";
     document.querySelector(`input[name="breakMode"][value="${breakMode}"]`).checked = true;
@@ -258,10 +300,18 @@ function getClassShiftForSection(section) {
 
 function addSubject(subject) {
   const normalized = subject.trim();
-  if (!normalized) return;
+  if (!normalized) {
+    showMessages([{ type: "error", text: "ჯერ ჩაწერე საგნის სახელი და შემდეგ დააჭირე დამატებას." }]);
+    $("subjectDraft").focus();
+    return;
+  }
 
   const exists = state.selectedSubjects.some((item) => item.name.toLowerCase() === normalized.toLowerCase());
-  if (!exists) state.selectedSubjects.push({ name: normalized, weeklyLessons: 1 });
+  if (exists) {
+    showMessages([{ type: "warning", text: `საგანი „${normalized}“ უკვე დამატებულია.` }]);
+    return;
+  }
+  state.selectedSubjects.push({ name: normalized, weeklyLessons: 1 });
 
   $("subjectDraft").value = "";
   renderSubjectChips();
@@ -287,118 +337,20 @@ function renderSubjectChips() {
     .join("");
 }
 
-function renderSubjectSourceOptions() {
-  const select = $("subjectSourceClass");
-  const currentValue = select.value;
-
-  if (state.classes.length === 0) {
-    select.innerHTML = `<option value="">ჯერ დაამატე კლასი</option>`;
-    select.disabled = true;
-    $("copySubjectsBtn").disabled = true;
-    return;
-  }
-
-  select.disabled = false;
-  $("copySubjectsBtn").disabled = false;
-  select.innerHTML = `
-    <option value="">აირჩიე კლასი</option>
-    ${state.classes.map((classItem, index) => `<option value="${index}">${classItem.name}</option>`).join("")}
-  `;
-  select.value = state.classes[currentValue] ? currentValue : "";
-}
-
-function copySubjectsFromClass() {
-  const index = Number($("subjectSourceClass").value);
-  const classItem = state.classes[index];
-
-  if (!classItem) {
-    showMessages([{ type: "error", text: "საგნების გადმოსატანად ჯერ აირჩიე კლასი." }]);
-    return;
-  }
-
-  state.selectedSubjects = classItem.subjects.map((subject) => ({ ...subject }));
-  renderSubjectChips();
-  showMessages([{ type: "ok", text: `${classItem.name} კლასის საგნები გადმოტანილია.` }]);
-  persistDraft();
-}
-
-function clearSelectedSubjects() {
-  state.selectedSubjects = [];
-  renderSubjectChips();
-  persistDraft();
-}
-
-function renderBulkClassOptions() {
-  const validClassNames = new Set(state.classes.map((classItem) => classItem.name));
-  state.selectedBulkClasses = state.selectedBulkClasses.filter((className) => validClassNames.has(className));
-
-  if (state.classes.length === 0) {
-    $("bulkClassOptions").innerHTML = `<p class="empty-note">ჯერ დაამატე კლასები.</p>`;
-    $("selectAllBulkClassesBtn").disabled = true;
-    $("addBulkSubjectBtn").disabled = true;
-    return;
-  }
-
-  $("selectAllBulkClassesBtn").disabled = false;
-  $("addBulkSubjectBtn").disabled = false;
-  $("selectAllBulkClassesBtn").textContent =
-    state.selectedBulkClasses.length === state.classes.length ? "მონიშვნის მოხსნა" : "ყველას მონიშვნა";
-  $("bulkClassOptions").innerHTML = state.classes
-    .map(
-      (classItem) => `
-        <label class="class-option">
-          <input type="checkbox" value="${classItem.name}" data-bulk-class ${
-            state.selectedBulkClasses.includes(classItem.name) ? "checked" : ""
-          } />
-          <span>${classItem.name}</span>
-        </label>
-      `,
-    )
-    .join("");
-}
-
-function toggleAllBulkClasses() {
-  state.selectedBulkClasses =
-    state.selectedBulkClasses.length === state.classes.length ? [] : state.classes.map((classItem) => classItem.name);
-  renderBulkClassOptions();
-  persistDraft();
-}
-
-function addSubjectToSelectedClasses() {
-  const name = $("bulkSubjectName").value.trim();
-  const weeklyLessons = Number($("bulkSubjectWeekly").value);
-
-  if (!name || !Number.isFinite(weeklyLessons) || weeklyLessons < 1) {
-    showMessages([{ type: "error", text: "მიუთითე საგნის სახელი და სწორი კვირეული რაოდენობა." }]);
-    return;
-  }
-
-  if (state.selectedBulkClasses.length === 0) {
-    showMessages([{ type: "error", text: "მონიშნე მინიმუმ ერთი კლასი." }]);
-    return;
-  }
-
-  state.classes.forEach((classItem) => {
-    if (!state.selectedBulkClasses.includes(classItem.name)) return;
-    const existingSubject = classItem.subjects.find((subject) => subject.name.toLowerCase() === name.toLowerCase());
-    if (existingSubject) existingSubject.weeklyLessons = weeklyLessons;
-    else classItem.subjects.push({ name, weeklyLessons });
-  });
-
-  const updatedCount = state.selectedBulkClasses.length;
-  $("bulkSubjectName").value = "";
-  state.selectedBulkClasses = [];
-  renderClasses();
-  showMessages([{ type: "ok", text: `${name} დაემატა ${updatedCount} კლასს.` }]);
-  persistDraft();
-}
-
 function addTeacherSubject(subject) {
   const normalized = subject.trim();
-  if (!normalized) return;
+  if (!normalized) {
+    showMessages([{ type: "error", text: "ჯერ ჩაწერე მასწავლებლის საგანი და შემდეგ დააჭირე დამატებას." }]);
+    $("teacherSubjectDraft").focus();
+    return;
+  }
 
   const exists = state.selectedTeacherSubjects.some((item) => item.name.toLowerCase() === normalized.toLowerCase());
-  if (!exists) state.selectedTeacherSubjects.push({ name: normalized, classes: [] });
+  if (exists) {
+    showMessages([{ type: "warning", text: `საგანი „${normalized}“ ამ მასწავლებელთან უკვე დამატებულია.` }]);
+    return;
+  }
+  state.selectedTeacherSubjects.push({ name: normalized, classes: [] });
 
   $("teacherSubjectDraft").value = "";
   renderTeacherSubjectChips();
@@ -475,10 +427,19 @@ function addTeacherAvailability() {
   }
 
   const days = selectedDay === "ყველა" ? DAYS : [selectedDay];
+  let addedCount = 0;
   days.forEach((day) => {
     const exists = state.selectedTeacherAvailability.some((item) => item.day === day && item.from === from && item.to === to);
-    if (!exists) state.selectedTeacherAvailability.push({ day, from, to });
+    if (!exists) {
+      state.selectedTeacherAvailability.push({ day, from, to });
+      addedCount += 1;
+    }
   });
+
+  if (addedCount === 0) {
+    showMessages([{ type: "warning", text: "ეს თავისუფალი დრო უკვე დამატებულია." }]);
+    return;
+  }
 
   state.selectedTeacherAvailability.sort((first, second) => DAYS.indexOf(first.day) - DAYS.indexOf(second.day) || timeToMinutes(first.from) - timeToMinutes(second.from));
   renderTeacherAvailabilityList();
@@ -573,11 +534,7 @@ function resetClassForm() {
   $("classMinLessons").value = "4";
   $("classMaxLessons").value = "6";
   state.classSectionShifts = {};
-  state.selectedSubjects = [
-    { name: "ქართული", weeklyLessons: 7 },
-    { name: "მათემატიკა", weeklyLessons: 7 },
-    { name: "ინგლისური", weeklyLessons: 6 },
-  ];
+  state.selectedSubjects = [];
   setClassEditingMode(null);
   renderSubjectChips();
   updateLessonRangePreview();
@@ -586,12 +543,12 @@ function resetClassForm() {
 }
 
 function resetTeacherForm() {
-  $("teacherName").value = "ნინო მასწავლებელი";
-  state.selectedTeacherSubjects = [{ name: "ქართული", classes: [] }];
-  state.selectedTeacherAvailability = DAYS.map((day) => ({ day, from: "09:00", to: "17:00" }));
+  $("teacherName").value = "";
+  state.selectedTeacherSubjects = [];
+  state.selectedTeacherAvailability = [];
   $("teacherAvailabilityDay").value = "ყველა";
-  $("teacherAvailabilityFrom").value = "09:00";
-  $("teacherAvailabilityTo").value = "17:00";
+  $("teacherAvailabilityFrom").value = "";
+  $("teacherAvailabilityTo").value = "";
   setTeacherEditingMode(null);
   renderTeacherSubjectChips();
   renderTeacherAvailabilityList();
@@ -605,10 +562,11 @@ function clearAllData() {
   localStorage.removeItem(STORAGE_KEY);
   state.classes = [];
   state.teachers = [];
-  state.selectedBulkClasses = [];
   state.classSectionShifts = {};
   state.generatedVariants = [];
   state.selectedVariantIndex = 0;
+  state.canLoadMoreVariants = false;
+  state.generatedConfigSignature = "";
   resetClassForm();
   resetTeacherForm();
   $("scheduleOutput").innerHTML = "";
@@ -645,8 +603,6 @@ function renderClasses() {
     )
     .join("");
   updateSummary();
-  renderSubjectSourceOptions();
-  renderBulkClassOptions();
   renderTeacherClassOptions();
 }
 
@@ -691,24 +647,39 @@ function addClass() {
   const subjects = state.selectedSubjects.map((subject) => ({ ...subject }));
   const minLessonsPerDay = Number($("classMinLessons").value);
   const maxLessonsPerDay = Number($("classMaxLessons").value);
+  const formErrors = [];
 
-  if (!grade || subjects.length === 0) {
-    showMessages([{ type: "error", text: "კლასის დამატებისთვის შეავსე კლასი და დაამატე მინიმუმ ერთი საგანი." }]);
-    return;
+  if (!Number.isInteger(Number(grade)) || Number(grade) < 1 || Number(grade) > 12) {
+    formErrors.push("კლასი უნდა იყოს მთელი რიცხვი 1-დან 12-მდე.");
   }
-
-  if (subjects.some((subject) => !Number.isFinite(subject.weeklyLessons) || subject.weeklyLessons < 1)) {
-    showMessages([{ type: "error", text: "თითოეული საგნის კვირეული რაოდენობა უნდა იყოს მინიმუმ 1." }]);
-    return;
+  if (sections.some((section) => section.length > 2 || /\s/.test(section))) {
+    formErrors.push("ქვეკლასი ჩაწერე მოკლედ, მაგალითად ა. რამდენიმე ქვეკლასი გამოყავი მძიმით: ა, ბ, გ.");
   }
-
+  if (subjects.length === 0) formErrors.push("დაამატე მინიმუმ ერთი საგანი.");
+  subjects.forEach((subject) => {
+    if (!subject.name.trim()) formErrors.push("საგნის სახელი ცარიელი ვერ იქნება.");
+    if (!Number.isInteger(subject.weeklyLessons) || subject.weeklyLessons < 1 || subject.weeklyLessons > 20) {
+      formErrors.push(`საგანს „${subject.name}“ კვირეული რაოდენობა 1-დან 20-მდე უნდა ჰქონდეს.`);
+    }
+  });
   if (state.editingClassIndex !== null && sections.length > 1) {
-    showMessages([{ type: "error", text: "რედაქტირებისას მხოლოდ ერთი ქვეკლასი მიუთითე." }]);
-    return;
+    formErrors.push("ერთი კლასის რედაქტირებისას მხოლოდ ერთი ქვეკლასი მიუთითე.");
+  }
+  if (!Number.isInteger(minLessonsPerDay) || minLessonsPerDay < 1 || minLessonsPerDay > 10) {
+    formErrors.push("დღიური მინიმუმი უნდა იყოს 1-დან 10-მდე.");
+  }
+  if (!Number.isInteger(maxLessonsPerDay) || maxLessonsPerDay < 1 || maxLessonsPerDay > 10) {
+    formErrors.push("დღიური მაქსიმუმი უნდა იყოს 1-დან 10-მდე.");
+  }
+  if (Number.isInteger(minLessonsPerDay) && Number.isInteger(maxLessonsPerDay) && minLessonsPerDay > maxLessonsPerDay) {
+    formErrors.push("დღიური მინიმუმი მაქსიმუმზე მეტი ვერ იქნება.");
+  }
+  if (!getActiveShifts().includes($("classShift").value)) {
+    formErrors.push("არჩეული სმენა გამორთულია. აირჩიე მოქმედი სმენა.");
   }
 
-  if (!minLessonsPerDay || !maxLessonsPerDay || minLessonsPerDay < 1 || maxLessonsPerDay < minLessonsPerDay) {
-    showMessages([{ type: "error", text: "კლასისთვის დღიური მინიმუმი და მაქსიმუმი სწორად მიუთითე." }]);
+  if (formErrors.length > 0) {
+    showValidationError("კლასი ვერ დაემატა", formErrors, !grade ? "classGrade" : null);
     return;
   }
 
@@ -806,24 +777,40 @@ function addTeacher() {
   }));
   const classes = Array.from(new Set(assignments.flatMap((assignment) => assignment.classes)));
   const availability = state.selectedTeacherAvailability.map((item) => ({ ...item }));
+  const formErrors = [];
 
-  if (!name || assignments.length === 0 || classes.length === 0 || availability.length === 0) {
-    showMessages([{ type: "error", text: "მასწავლებლის დამატებისთვის ყველა ველი შეავსე." }]);
-    return;
-  }
-
-  if (assignments.some((assignment) => assignment.classes.length === 0)) {
-    showMessages([{ type: "error", text: "თითოეულ საგანთან მონიშნე მინიმუმ ერთი კლასი." }]);
-    return;
-  }
-
+  if (!name) formErrors.push("ჩაწერე მასწავლებლის სახელი და გვარი.");
+  if (assignments.length === 0) formErrors.push("დაამატე მინიმუმ ერთი საგანი.");
+  assignments.forEach((assignment) => {
+    if (!assignment.name.trim()) formErrors.push("საგნის სახელი ცარიელი ვერ იქნება.");
+    if (assignment.classes.length === 0) {
+      formErrors.push(`საგანთან „${assignment.name}“ მონიშნე მინიმუმ ერთი კლასი.`);
+    }
+    assignment.classes.forEach((classNameValue) => {
+      const classItem = state.classes.find((item) => item.name === classNameValue);
+      if (classItem && !classItem.subjects.some((subject) => subject.name.toLowerCase() === assignment.name.toLowerCase())) {
+        formErrors.push(`${classNameValue} კლასი არ სწავლობს საგანს „${assignment.name}“. შეცვალე კლასი ან საგანი.`);
+      }
+    });
+  });
+  if (classes.length === 0 && assignments.length > 0) formErrors.push("მონიშნე, რომელ კლასებს ასწავლის მასწავლებელი.");
+  if (availability.length === 0) formErrors.push("დაამატე მინიმუმ ერთი თავისუფალი დღე და დრო.");
   if (availability.some((item) => !DAYS.includes(item.day) || !isValidTime(item.from) || !isValidTime(item.to))) {
-    showMessages([{ type: "error", text: "მასწავლებლის თავისუფალი დრო მიუთითე 24-საათიან ფორმატში, მაგალითად 09:00 ან 15:30." }]);
-    return;
+    formErrors.push("ერთ-ერთი თავისუფალი დრო არასწორია. გამოიყენე 24-საათიანი ფორმატი, მაგალითად 09:00.");
+  }
+  if (
+    availability.some(
+      (item) => isValidTime(item.from) && isValidTime(item.to) && timeToMinutes(item.from) >= timeToMinutes(item.to),
+    )
+  ) {
+    formErrors.push("თავისუფალი დროის დასაწყისი დასრულებაზე ადრე უნდა იყოს.");
+  }
+  if (state.teachers.some((teacher, index) => teacher.name.toLowerCase() === name.toLowerCase() && index !== state.editingTeacherIndex)) {
+    formErrors.push(`მასწავლებელი „${name}“ უკვე დამატებულია.`);
   }
 
-  if (availability.some((item) => timeToMinutes(item.from) >= timeToMinutes(item.to))) {
-    showMessages([{ type: "error", text: "მასწავლებლის თავისუფალი დროის დასაწყისი დასრულებაზე ადრე უნდა იყოს." }]);
+  if (formErrors.length > 0) {
+    showValidationError("მასწავლებელი ვერ დაემატა", formErrors, !name ? "teacherName" : null);
     return;
   }
 
@@ -857,7 +844,7 @@ function editClass(index) {
   updateLessonRangePreview();
   updateShiftAvailability();
   $("classGrade").focus();
-  showMessages([{ type: "warn", text: `${item.name} ჩაიტვირთა შესაცვლელად. დასრულებისას დააჭირე „ცვლილების შენახვა“.` }]);
+  showMessages([{ type: "warning", text: `${item.name} ჩაიტვირთა შესაცვლელად. დასრულებისას დააჭირე „ცვლილების შენახვა“.` }]);
   persistDraft();
 }
 
@@ -879,7 +866,7 @@ function editTeacher(index) {
   renderTeacherSubjectChips();
   renderTeacherAvailabilityList();
   $("teacherName").focus();
-  showMessages([{ type: "warn", text: `${item.name} ჩაიტვირთა შესაცვლელად. დასრულებისას დააჭირე „ცვლილების შენახვა“.` }]);
+  showMessages([{ type: "warning", text: `${item.name} ჩაიტვირთა შესაცვლელად. დასრულებისას დააჭირე „ცვლილების შენახვა“.` }]);
   persistDraft();
 }
 
@@ -940,32 +927,439 @@ function teacherCanTeach(teacher, classItem, subject, day, slot) {
   );
 }
 
-function rotate(items, amount) {
-  if (items.length === 0) return items;
-  const offset = amount % items.length;
-  return [...items.slice(offset), ...items.slice(0, offset)];
+function solverWorkerMain() {
+  const DAYS = ["ორშაბათი", "სამშაბათი", "ოთხშაბათი", "ხუთშაბათი", "პარასკევი"];
+
+  self.onmessage = (event) => {
+    try {
+      self.postMessage(solvePartition(event.data));
+    } catch (error) {
+      self.postMessage({ error: error?.message || "უცნობი შეცდომა" });
+    }
+  };
+
+  function timeToMinutes(value) {
+    const [hours, minutes] = value.split(":").map(Number);
+    return hours * 60 + minutes;
+  }
+
+  function minutesToTime(value) {
+    return `${String(Math.floor(value / 60)).padStart(2, "0")}:${String(value % 60).padStart(2, "0")}`;
+  }
+
+  function breakAfter(settings, lesson) {
+    if (settings.breakMode === "constant") return settings.breakDuration;
+    return Number.isFinite(settings.customBreaks[lesson - 1]) ? settings.customBreaks[lesson - 1] : 0;
+  }
+
+  function buildClassSlots(classItem, settings) {
+    const slots = [];
+    let start = timeToMinutes(settings.shiftStarts[classItem.shift]);
+    for (let lesson = 1; lesson <= classItem.maxLessonsPerDay; lesson += 1) {
+      const end = start + settings.lessonDuration;
+      slots.push({ lesson, start, end, label: `${minutesToTime(start)}-${minutesToTime(end)}` });
+      start = end + breakAfter(settings, lesson);
+    }
+    return slots;
+  }
+
+  function solvePartition(input) {
+    const startedAt = Date.now();
+    const deadline = startedAt + input.timeLimitMs;
+    const solutions = [];
+    const signatures = new Set();
+    const excludedSignatures = new Set(input.excludedSignatures || []);
+    const teacherBusy = input.teachers.map(() => DAYS.map(() => []));
+    const currentSchedule = Object.fromEntries(
+      input.classes.map((classItem) => [
+        classItem.name,
+        { classItem, days: Object.fromEntries(DAYS.map((day) => [day, []])) },
+      ]),
+    );
+    let nodes = 0;
+    let timedOut = false;
+    let solutionLimitReached = false;
+    let firstClassLayoutIndex = 0;
+
+    function shouldStop() {
+      nodes += 1;
+      if (solutions.length >= input.maxSolutions) {
+        solutionLimitReached = true;
+        return true;
+      }
+      if (Date.now() >= deadline) {
+        timedOut = true;
+        return true;
+      }
+      return false;
+    }
+
+    function teacherMatches(teacher, classItem, subjectName) {
+      return (teacher.assignments || []).some(
+        (assignment) =>
+          assignment.name.toLowerCase() === subjectName.toLowerCase() &&
+          (assignment.classes || []).includes(classItem.name),
+      );
+    }
+
+    function teacherAvailable(teacher, day, slot) {
+      return (teacher.availability || []).some(
+        (range) =>
+          range.day === day &&
+          timeToMinutes(range.from) <= slot.start &&
+          timeToMinutes(range.to) >= slot.end,
+      );
+    }
+
+    function hasConflict(teacherIndex, dayIndex, slot) {
+      return teacherBusy[teacherIndex][dayIndex].some(
+        (busySlot) => slot.start < busySlot.end && slot.end > busySlot.start,
+      );
+    }
+
+    function buildContext(classItem) {
+      const slots = buildClassSlots(classItem, input.settings);
+      const candidateCache = new Map();
+
+      function candidates(subjectName, dayIndex, lessonIndex) {
+        const key = `${subjectName}|${dayIndex}|${lessonIndex}`;
+        if (!candidateCache.has(key)) {
+          const slot = slots[lessonIndex];
+          candidateCache.set(
+            key,
+            input.teachers
+              .map((teacher, teacherIndex) => ({ teacher, teacherIndex }))
+              .filter(
+                ({ teacher }) =>
+                  teacherMatches(teacher, classItem, subjectName) && teacherAvailable(teacher, DAYS[dayIndex], slot),
+              )
+              .map(({ teacherIndex }) => teacherIndex),
+          );
+        }
+        return candidateCache.get(key);
+      }
+
+      const scarcity = classItem.subjects.reduce((score, subject) => {
+        let possible = 0;
+        for (let dayIndex = 0; dayIndex < DAYS.length; dayIndex += 1) {
+          for (let lessonIndex = 0; lessonIndex < slots.length; lessonIndex += 1) {
+            if (candidates(subject.name, dayIndex, lessonIndex).length > 0) possible += 1;
+          }
+        }
+        return score + subject.weeklyLessons / Math.max(1, possible);
+      }, 0);
+
+      return { classItem, slots, candidates, scarcity };
+    }
+
+    const contexts = input.classes
+      .map(buildContext)
+      .sort(
+        (first, second) =>
+          second.scarcity - first.scarcity ||
+          second.classItem.subjects.length - first.classItem.subjects.length ||
+          first.classItem.name.localeCompare(second.classItem.name, "ka"),
+      );
+
+    function snapshotSchedule() {
+      return Object.fromEntries(
+        input.classes.map((classItem) => {
+          const current = currentSchedule[classItem.name];
+          return [
+            classItem.name,
+            {
+              classItem,
+              days: Object.fromEntries(
+                DAYS.map((day) => [day, current.days[day].map((lesson) => ({ ...lesson }))]),
+              ),
+            },
+          ];
+        }),
+      );
+    }
+
+    function scheduleSignature(schedule) {
+      return input.classes
+        .map((classItem) =>
+          DAYS.flatMap((day) =>
+            schedule[classItem.name].days[day].map(
+              (lesson) => `${classItem.name}:${day}:${lesson.lesson}:${lesson.subject}:${lesson.teacher}`,
+            ),
+          ).join("|"),
+        )
+        .join("||");
+    }
+
+    function enumerateDailyCounts(classItem, callback) {
+      const totalLessons = classItem.subjects.reduce((total, subject) => total + subject.weeklyLessons, 0);
+      const counts = Array(DAYS.length).fill(0);
+
+      function visit(dayIndex, remaining) {
+        if (shouldStop()) return true;
+        if (dayIndex === DAYS.length) return remaining === 0 ? callback([...counts]) : false;
+
+        const daysAfter = DAYS.length - dayIndex - 1;
+        const lower = Math.max(classItem.minLessonsPerDay, remaining - daysAfter * classItem.maxLessonsPerDay);
+        const upper = Math.min(classItem.maxLessonsPerDay, remaining - daysAfter * classItem.minLessonsPerDay);
+        if (lower > upper) return false;
+
+        const target = remaining / (daysAfter + 1);
+        const values = Array.from({ length: upper - lower + 1 }, (_, index) => lower + index).sort(
+          (first, second) => Math.abs(first - target) - Math.abs(second - target) || first - second,
+        );
+        for (const value of values) {
+          counts[dayIndex] = value;
+          if (visit(dayIndex + 1, remaining - value)) return true;
+        }
+        return false;
+      }
+
+      return visit(0, totalLessons);
+    }
+
+    function enumerateLayouts(context, counts, callback) {
+      const positions = [];
+      counts.forEach((count, dayIndex) => {
+        for (let lessonIndex = 0; lessonIndex < count; lessonIndex += 1) {
+          positions.push({ dayIndex, lessonIndex, slot: context.slots[lessonIndex] });
+        }
+      });
+
+      const remaining = context.classItem.subjects.map((subject) => subject.weeklyLessons);
+      const usedSubjectsByDay = DAYS.map(() => new Set());
+      const lessons = Array(positions.length);
+
+      function enoughFutureSpace(nextIndex) {
+        for (let subjectIndex = 0; subjectIndex < remaining.length; subjectIndex += 1) {
+          if (remaining[subjectIndex] <= 0) continue;
+          const subject = context.classItem.subjects[subjectIndex];
+          if (subject.weeklyLessons > DAYS.length) continue;
+
+          const possibleDays = new Set();
+          for (let positionIndex = nextIndex; positionIndex < positions.length; positionIndex += 1) {
+            const dayIndex = positions[positionIndex].dayIndex;
+            if (!usedSubjectsByDay[dayIndex].has(subject.name)) possibleDays.add(dayIndex);
+          }
+          if (remaining[subjectIndex] > possibleDays.size) return false;
+        }
+        return true;
+      }
+
+      function visit(positionIndex) {
+        if (shouldStop()) return true;
+        if (positionIndex === positions.length) return callback(lessons.map((lesson) => ({ ...lesson })));
+
+        const position = positions[positionIndex];
+        const candidates = context.classItem.subjects
+          .map((subject, subjectIndex) => ({ subject, subjectIndex }))
+          .filter(({ subject, subjectIndex }) => {
+            if (remaining[subjectIndex] <= 0) return false;
+            if (subject.weeklyLessons <= DAYS.length && usedSubjectsByDay[position.dayIndex].has(subject.name)) return false;
+            return context.candidates(subject.name, position.dayIndex, position.lessonIndex).length > 0;
+          })
+          .sort(
+            (first, second) =>
+              context.candidates(first.subject.name, position.dayIndex, position.lessonIndex).length -
+                context.candidates(second.subject.name, position.dayIndex, position.lessonIndex).length ||
+              remaining[second.subjectIndex] - remaining[first.subjectIndex] ||
+              first.subject.name.localeCompare(second.subject.name, "ka"),
+          );
+
+        for (const candidate of candidates) {
+          remaining[candidate.subjectIndex] -= 1;
+          usedSubjectsByDay[position.dayIndex].add(candidate.subject.name);
+          lessons[positionIndex] = {
+            ...position,
+            subject: candidate.subject.name,
+            baseCandidates: context.candidates(candidate.subject.name, position.dayIndex, position.lessonIndex),
+          };
+
+          if (enoughFutureSpace(positionIndex + 1) && visit(positionIndex + 1)) return true;
+
+          remaining[candidate.subjectIndex] += 1;
+          if (candidate.subject.weeklyLessons <= DAYS.length) {
+            usedSubjectsByDay[position.dayIndex].delete(candidate.subject.name);
+          }
+        }
+        return false;
+      }
+
+      return visit(0);
+    }
+
+    function assignTeachers(context, lessons, onComplete) {
+      const assignments = Array(lessons.length).fill(-1);
+
+      function visit(assignedCount) {
+        if (shouldStop()) return true;
+        if (assignedCount === lessons.length) return onComplete(assignments);
+
+        let selectedLessonIndex = -1;
+        let selectedCandidates = null;
+        for (let lessonIndex = 0; lessonIndex < lessons.length; lessonIndex += 1) {
+          if (assignments[lessonIndex] !== -1) continue;
+          const lesson = lessons[lessonIndex];
+          const available = lesson.baseCandidates.filter(
+            (teacherIndex) => !hasConflict(teacherIndex, lesson.dayIndex, lesson.slot),
+          );
+          if (available.length === 0) return false;
+          if (!selectedCandidates || available.length < selectedCandidates.length) {
+            selectedLessonIndex = lessonIndex;
+            selectedCandidates = available;
+            if (available.length === 1) break;
+          }
+        }
+
+        const lesson = lessons[selectedLessonIndex];
+        const orderedCandidates = [...selectedCandidates].sort(
+          (first, second) =>
+            ((first + input.partitionIndex) % input.teachers.length) -
+            ((second + input.partitionIndex) % input.teachers.length),
+        );
+        for (const teacherIndex of orderedCandidates) {
+          assignments[selectedLessonIndex] = teacherIndex;
+          teacherBusy[teacherIndex][lesson.dayIndex].push({ start: lesson.slot.start, end: lesson.slot.end });
+          if (visit(assignedCount + 1)) return true;
+          teacherBusy[teacherIndex][lesson.dayIndex].pop();
+          assignments[selectedLessonIndex] = -1;
+        }
+        return false;
+      }
+
+      return visit(0);
+    }
+
+    function searchClass(contextIndex) {
+      if (shouldStop()) return true;
+      if (contextIndex === contexts.length) {
+        const schedule = snapshotSchedule();
+        const signature = scheduleSignature(schedule);
+        if (!signatures.has(signature)) {
+          signatures.add(signature);
+          if (!excludedSignatures.has(signature)) {
+            solutions.push({ schedule, unresolved: [], dailyShortages: [] });
+          }
+        }
+        if (solutions.length >= input.maxSolutions) {
+          solutionLimitReached = true;
+          return true;
+        }
+        return false;
+      }
+
+      const context = contexts[contextIndex];
+      return enumerateDailyCounts(context.classItem, (counts) =>
+        enumerateLayouts(context, counts, (lessons) => {
+          if (contextIndex === 0) {
+            const layoutIndex = firstClassLayoutIndex;
+            firstClassLayoutIndex += 1;
+            if (layoutIndex % input.partitionCount !== input.partitionIndex) return false;
+          }
+
+          return assignTeachers(context, lessons, (assignments) => {
+            const days = Object.fromEntries(DAYS.map((day) => [day, []]));
+            lessons.forEach((lesson, lessonIndex) => {
+              days[DAYS[lesson.dayIndex]].push({
+                lesson: lesson.slot.lesson,
+                time: lesson.slot.label,
+                subject: lesson.subject,
+                teacher: input.teachers[assignments[lessonIndex]].name,
+              });
+            });
+            currentSchedule[context.classItem.name].days = days;
+            const stop = searchClass(contextIndex + 1);
+            currentSchedule[context.classItem.name].days = Object.fromEntries(DAYS.map((day) => [day, []]));
+            return stop;
+          });
+        }),
+      );
+    }
+
+    searchClass(0);
+    return {
+      solutions,
+      timedOut,
+      exhaustive: !timedOut && !solutionLimitReached,
+      nodes,
+      elapsedMs: Date.now() - startedAt,
+    };
+  }
 }
 
-function createLessonRequests(variantIndex = 0) {
-  const classes = variantIndex % 2 === 0 ? state.classes : [...state.classes].reverse();
+async function runConstraintSolver(settings, options = {}) {
+  const maxVariants = options.maxVariants || 10;
+  const excludedSignatures = options.excludedSignatures || [];
+  const availableProcessors = Math.max(1, Number(navigator.hardwareConcurrency) || 2);
+  const workerCount = Math.min(6, availableProcessors);
+  const workerSource = `(${solverWorkerMain.toString()})()`;
+  const workerUrl = URL.createObjectURL(new Blob([workerSource], { type: "text/javascript" }));
+  const workers = [];
 
-  return classes.flatMap((classItem, classIndex) =>
-    rotate(classItem.subjects, variantIndex + classIndex).flatMap((subject) =>
-      Array.from({ length: subject.weeklyLessons }, () => ({
-        className: classItem.name,
-        subject: subject.name,
-        weeklyLessons: subject.weeklyLessons,
-      })),
-    ),
-  );
+  try {
+    const tasks = Array.from({ length: workerCount }, (_, partitionIndex) =>
+      new Promise((resolve) => {
+        const worker = new Worker(workerUrl);
+        workers.push(worker);
+        worker.onmessage = (event) => resolve(event.data);
+        worker.onerror = () => resolve({ error: "ძებნის პროცესი ვერ გაეშვა." });
+        worker.postMessage({
+          classes: state.classes,
+          teachers: state.teachers.map(migrateTeacherAvailability),
+          settings,
+          partitionIndex,
+          partitionCount: workerCount,
+          maxSolutions: maxVariants,
+          excludedSignatures,
+          timeLimitMs: 30000,
+        });
+      }),
+    );
+    const results = await Promise.all(tasks);
+    if (results.some((result) => result.error)) throw new Error(results.find((result) => result.error).error);
+
+    const variants = [];
+    const seen = new Set(excludedSignatures);
+    results.forEach((result) => {
+      result.solutions.forEach((solution) => {
+        const signature = scheduleSignature(solution.schedule);
+        if (seen.has(signature)) return;
+        seen.add(signature);
+        variants.push(solution);
+      });
+    });
+
+    return {
+      variants: variants.slice(0, maxVariants),
+      hasMore: variants.length > maxVariants || results.some((result) => !result.exhaustive),
+      timedOut: results.some((result) => result.timedOut),
+      exhaustive: results.every((result) => result.exhaustive),
+      nodes: results.reduce((total, result) => total + result.nodes, 0),
+      elapsedMs: Math.max(...results.map((result) => result.elapsedMs)),
+      workerCount,
+    };
+  } finally {
+    workers.forEach((worker) => worker.terminate());
+    URL.revokeObjectURL(workerUrl);
+  }
 }
 
-function generateSchedule() {
+async function generateSchedule() {
   const settings = getSettings();
   const errors = validateBeforeGenerate(settings);
 
   if (errors.length > 0) {
-    showMessages(errors.map((text) => ({ type: "error", text })));
+    showMessages([
+      {
+        type: "error",
+        title: "ცხრილის შექმნამდე რამდენიმე რამეა შესასწორებელი",
+        text: "გაიარე ქვემოთ ჩამოთვლილი პუნქტები და შემდეგ კვლავ დააჭირე გენერაციას.",
+        details: errors,
+      },
+    ]);
+    state.generatedVariants = [];
+    state.selectedVariantIndex = 0;
+    state.canLoadMoreVariants = false;
+    state.generatedConfigSignature = "";
     $("scheduleOutput").innerHTML = "";
     $("variantPicker").classList.add("hidden");
     $("variantPicker").innerHTML = "";
@@ -973,105 +1367,130 @@ function generateSchedule() {
     return;
   }
 
-  const variants = [];
-  const seen = new Set();
+  const generateButton = $("generateBtn");
+  const originalButtonText = generateButton.textContent;
+  generateButton.disabled = true;
+  generateButton.textContent = "მიმდინარეობს ძებნა...";
+  showMessages([
+    {
+      type: "info",
+      title: "მიმდინარეობს სრული ძებნა",
+      text: "პროგრამა რამდენიმე პროცესით ამოწმებს საგნების, დღეების, საათებისა და მასწავლებლების კომბინაციებს. რთულ მონაცემებს შეიძლება დაახლოებით 30 წამი დასჭირდეს.",
+    },
+  ]);
+  $("scheduleOutput").innerHTML = "";
+  $("variantPicker").classList.add("hidden");
+  await new Promise((resolve) => setTimeout(resolve, 60));
 
-  for (let variantIndex = 0; variantIndex < 12; variantIndex += 1) {
-    const result = buildScheduleVariant(settings, variantIndex);
-    const isValidVariant = result.unresolved.length === 0 && result.dailyShortages.length === 0;
-    if (!isValidVariant) continue;
+  try {
+    const result = await runConstraintSolver(settings);
+    state.generatedVariants = result.variants;
+    state.selectedVariantIndex = 0;
+    state.canLoadMoreVariants = result.hasMore;
+    state.generatedConfigSignature = configurationSignature(settings);
 
-    const signature = scheduleSignature(result.schedule);
-    if (seen.has(signature)) continue;
-    seen.add(signature);
-    variants.push({ ...result, variantIndex });
-    if (variants.length === 5) break;
-  }
+    if (result.variants.length === 0) {
+      showMessages([
+        result.timedOut
+          ? {
+              type: "warning",
+              title: "30-წამიანი ღრმა ძებნა დასრულდა, მაგრამ პასუხი ჯერ არ დადასტურდა",
+              text: "ეს არ ნიშნავს, რომ ცხრილი შეუძლებელია. კონფიგურაცია ძალიან რთულია; შეამცირე შეზღუდვები ან კვლავ გაუშვი ძებნა სხვა კომბინაციების შესამოწმებლად.",
+              details: [`შემოწმდა ${result.nodes.toLocaleString("ka-GE")} შესაძლო ნაბიჯი ${result.workerCount} პარალელურ პროცესში.`],
+            }
+          : {
+              type: "error",
+              title: "გამართული ცხრილი ვერ არსებობს",
+              text: "ყველა შესაძლო კომბინაცია ამოიწურა და ვერც ერთმა დაიცვა ყველა მითითებული წესი.",
+              details: [
+                "შეამცირე კლასის დღიური მინიმუმი, გაზარდე მაქსიმუმი ან გააფართოვე მასწავლებლების თავისუფალი დრო.",
+                `სრულად შემოწმდა ${result.nodes.toLocaleString("ka-GE")} შესაძლო ნაბიჯი.`,
+              ],
+            },
+      ]);
+      renderVariantPicker();
+      persistDraft();
+      return;
+    }
 
-  state.generatedVariants = variants;
-  state.selectedVariantIndex = 0;
-
-  if (variants.length === 0) {
+    renderVariantPicker();
+    showVariant(0);
+    persistDraft();
+  } catch (error) {
+    state.generatedVariants = [];
+    state.canLoadMoreVariants = false;
+    state.generatedConfigSignature = "";
     showMessages([
       {
         type: "error",
-        text: "ამ მონაცემებით სრულად გამართული ცხრილი ვერ შეიქმნა. შეცვალე მასწავლებლების თავისუფალი დრო, დაამატე მასწავლებელი ან შეცვალე კლასის დღიური ლიმიტები.",
+        title: "ცხრილის ძებნა ტექნიკური მიზეზით შეწყდა",
+        text: error?.message || "ძებნის პროცესის გაშვება ვერ მოხერხდა. განაახლე გვერდი და სცადე ხელახლა.",
       },
     ]);
-    $("scheduleOutput").innerHTML = "";
-    renderVariantPicker();
-    persistDraft();
+  } finally {
+    generateButton.disabled = false;
+    generateButton.textContent = originalButtonText;
+  }
+}
+
+async function loadMoreVariants() {
+  const settings = getSettings();
+  if (configurationSignature(settings) !== state.generatedConfigSignature) {
+    showMessages([
+      {
+        type: "warning",
+        title: "მონაცემები შეიცვალა",
+        text: "ახალი მონაცემებით ვარიანტების მოსაძებნად თავიდან დააჭირე „ცხრილის გენერაციას“.",
+      },
+    ]);
     return;
   }
 
-  renderVariantPicker();
-  showVariant(0);
-  persistDraft();
-}
-
-function buildScheduleVariant(settings, variantIndex) {
-  const schedule = Object.fromEntries(
-    state.classes.map((item) => [
-      item.name,
-      {
-        classItem: item,
-        days: Object.fromEntries(DAYS.map((day) => [day, []])),
-      },
-    ]),
-  );
-  const teacherBusy = new Set();
-  const requests = createLessonRequests(variantIndex);
-  const unresolved = [];
-
-  for (const request of requests) {
-    const classItem = state.classes.find((item) => item.name === request.className);
-    const slots = buildSlots(classItem, settings);
-    let placed = false;
-
-    const dayOrder = rotate(DAYS, variantIndex + request.subject.length).sort(
-      (first, second) =>
-        schedule[classItem.name].days[first].length - schedule[classItem.name].days[second].length ||
-        DAYS.indexOf(first) - DAYS.indexOf(second),
-    );
-
-    for (const day of dayOrder) {
-      if (placed) break;
-
-      const nextLessonNumber = schedule[classItem.name].days[day].length + 1;
-      if (nextLessonNumber > classItem.maxLessonsPerDay) continue;
-
-      const slot = slots[nextLessonNumber - 1];
-      const subjectAlreadyToday =
-        request.weeklyLessons <= DAYS.length &&
-        schedule[classItem.name].days[day].some((lesson) => lesson.subject === request.subject);
-
-      if (subjectAlreadyToday) continue;
-
-      const teacher = state.teachers.find((candidate) => {
-        const teacherKey = `${candidate.name}|${day}|${slot.start}`;
-        return !teacherBusy.has(teacherKey) && teacherCanTeach(candidate, classItem, request.subject, day, slot);
-      });
-
-      if (!teacher) continue;
-
-      schedule[classItem.name].days[day].push({
-        lesson: slot.lesson,
-        time: slot.label,
-        subject: request.subject,
-        teacher: teacher.name,
-      });
-      teacherBusy.add(`${teacher.name}|${day}|${slot.start}`);
-      placed = true;
-    }
-
-    if (!placed) {
-      unresolved.push(`${request.className}: ${request.subject}`);
-    }
+  const button = document.querySelector('[data-load-more-variants="true"]');
+  if (button) {
+    button.disabled = true;
+    button.textContent = "ახალი ვარიანტები იძებნება...";
   }
+  showMessages([
+    {
+      type: "info",
+      title: "ვეძებთ ახალ ვარიანტებს",
+      text: "უკვე ნაჩვენები ცხრილები გამოტოვებულია. ძებნას შეიძლება დაახლოებით 30 წამი დასჭირდეს.",
+    },
+  ]);
 
-  const dailyShortages = findDailyShortages(schedule);
+  try {
+    const excludedSignatures = state.generatedVariants.map((variant) => scheduleSignature(variant.schedule));
+    const result = await runConstraintSolver(settings, { maxVariants: 10, excludedSignatures });
+    const firstNewIndex = state.generatedVariants.length;
+    state.generatedVariants.push(...result.variants);
+    state.canLoadMoreVariants = result.hasMore;
 
-  return { schedule, unresolved, dailyShortages };
+    if (result.variants.length > 0) {
+      showVariant(firstNewIndex);
+    } else {
+      renderVariantPicker();
+      showMessages([
+        {
+          type: result.timedOut ? "warning" : "info",
+          title: result.timedOut ? "ამ ძებნაში ახალი ვარიანტი ვერ მოიძებნა" : "ყველა შესაძლო ვარიანტი ნაჩვენებია",
+          text: result.timedOut
+            ? "შეგიძლია ძებნა კიდევ ერთხელ გააგრძელო, ან უკვე ნაჩვენები ვარიანტებიდან აირჩიო სასურველი."
+            : "სხვა ვალიდური ცხრილი ამ მონაცემებით აღარ არსებობს.",
+        },
+      ]);
+      persistDraft();
+    }
+  } catch (error) {
+    showMessages([
+      {
+        type: "error",
+        title: "ახალი ვარიანტების ძებნა შეწყდა",
+        text: error?.message || "სცადე კიდევ ერთხელ.",
+      },
+    ]);
+    renderVariantPicker();
+  }
 }
 
 function showVariant(index) {
@@ -1080,18 +1499,15 @@ function showVariant(index) {
 
   state.selectedVariantIndex = index;
   renderVariantPicker();
-  showMessages([{ type: "ok", text: `${state.generatedVariants.length} გამართული ვარიანტი შეიქმნა. არჩეულია ვარიანტი ${index + 1}.` }]);
+  showMessages([
+    {
+      type: "ok",
+      text: `${state.generatedVariants.length} სრულად გამართული ვარიანტი მოიძებნა ყველა მითითებული წესის დაცვით. არჩეულია ვარიანტი ${index + 1}.`,
+    },
+  ]);
 
   renderSchedule(variant.schedule);
   persistDraft();
-}
-
-function findDailyShortages(schedule) {
-  return Object.values(schedule).flatMap(({ classItem, days }) =>
-    DAYS.filter((day) => days[day].length < classItem.minLessonsPerDay).map(
-      (day) => `${classItem.name} ${day}: ${days[day].length}/${classItem.minLessonsPerDay}`,
-    ),
-  );
 }
 
 function scheduleSignature(schedule) {
@@ -1103,6 +1519,14 @@ function scheduleSignature(schedule) {
       ].join("|"),
     )
     .join("||");
+}
+
+function configurationSignature(settings) {
+  return JSON.stringify({
+    classes: state.classes,
+    teachers: state.teachers.map(migrateTeacherAvailability),
+    settings,
+  });
 }
 
 function renderVariantPicker() {
@@ -1129,6 +1553,7 @@ function renderVariantPicker() {
           `,
         )
         .join("")}
+      ${state.canLoadMoreVariants ? '<button data-load-more-variants="true">კიდევ ვარიანტების ნახვა</button>' : ""}
       <button class="primary" data-keep-variant="true">ამ ვარიანტის დატოვება</button>
     </div>
   `;
@@ -1140,6 +1565,7 @@ function keepSelectedVariant() {
 
   state.generatedVariants = [variant];
   state.selectedVariantIndex = 0;
+  state.canLoadMoreVariants = false;
   renderVariantPicker();
   renderSchedule(variant.schedule);
   showMessages([{ type: "ok", text: "არჩეული ვარიანტი დატოვებულია." }]);
@@ -1148,77 +1574,220 @@ function keepSelectedVariant() {
 
 function validateBeforeGenerate(settings) {
   const errors = [];
+  const shiftNames = { 1: "პირველი", 2: "მეორე", 3: "მესამე" };
 
-  if (state.classes.length === 0) errors.push("დაამატე მინიმუმ ერთი კლასი.");
-  if (state.teachers.length === 0) errors.push("დაამატე მინიმუმ ერთი მასწავლებელი.");
-  if (settings.activeShifts.some((shift) => !isValidTime(settings.shiftStarts[shift]))) {
-    errors.push("სმენების დროები მიუთითე 24-საათიან ფორმატში, მაგალითად 09:00 ან 14:30.");
+  if (state.classes.length === 0) errors.push("ნაბიჯი 1 — დაამატე მინიმუმ ერთი კლასი.");
+  if (state.teachers.length === 0) errors.push("ნაბიჯი 3 — დაამატე მინიმუმ ერთი მასწავლებელი.");
+
+  settings.activeShifts.forEach((shift) => {
+    if (!isValidTime(settings.shiftStarts[shift])) {
+      errors.push(`ნაბიჯი 2 — ${shiftNames[shift]} სმენის დაწყების დრო ჩაწერე ფორმატით საათი:წუთი, მაგალითად 09:00.`);
+    }
+  });
+
+  if (!Number.isFinite(settings.lessonDuration) || settings.lessonDuration < 20 || settings.lessonDuration > 90) {
+    errors.push("ნაბიჯი 2 — გაკვეთილის ხანგრძლივობა უნდა იყოს 20-დან 90 წუთამდე.");
   }
-  if (!settings.lessonDuration || settings.lessonDuration < 1) errors.push("გაკვეთილის ხანგრძლივობა უნდა იყოს დადებითი რიცხვი.");
-  if (settings.breakDuration < 0) errors.push("დასვენება უარყოფითი ვერ იქნება.");
+  if (!Number.isFinite(settings.breakDuration) || settings.breakDuration < 0 || settings.breakDuration > 40) {
+    errors.push("ნაბიჯი 2 — მუდმივი დასვენება უნდა იყოს 0-დან 40 წუთამდე.");
+  }
   if (settings.breakMode === "custom") {
     if (settings.customBreaks.length === 0) {
-      errors.push("განსხვავებული დასვენებისთვის ჩაწერე მინიმუმ ერთი დრო წუთებში.");
+      errors.push("ნაბიჯი 2 — განსხვავებული დასვენებების ველში ჩაწერე წუთები, მაგალითად 5, 10, 5.");
     }
-    if (settings.customBreaks.some((duration) => !Number.isFinite(duration) || duration < 0)) {
-      errors.push("განსხვავებული დასვენებები უნდა იყოს არაუარყოფითი რიცხვები, მაგალითად 5, 10, 5.");
+    if (settings.customBreaks.some((duration) => !Number.isFinite(duration) || duration < 0 || duration > 120)) {
+      errors.push("ნაბიჯი 2 — თითოეული განსხვავებული დასვენება უნდა იყოს 0-დან 120 წუთამდე და გამოყოფილი მძიმით.");
+    }
+    const requiredBreakCount = Math.max(0, ...state.classes.map((classItem) => classItem.maxLessonsPerDay - 1));
+    if (settings.customBreaks.length > 0 && settings.customBreaks.length < requiredBreakCount) {
+      errors.push(
+        `ნაბიჯი 2 — მაქსიმუმ ${requiredBreakCount + 1} გაკვეთილისთვის ჩაწერე მინიმუმ ${requiredBreakCount} დასვენების დრო.`,
+      );
     }
   }
 
+  const teacherNames = new Set();
   for (const teacher of state.teachers) {
+    const teacherName = teacher.name?.trim() || "უსახელო მასწავლებელი";
+    const normalizedTeacherName = teacherName.toLowerCase();
+    if (!teacher.name?.trim()) errors.push("ნაბიჯი 3 — ერთ-ერთ მასწავლებელს სახელი და გვარი არ აქვს მითითებული.");
+    if (teacherNames.has(normalizedTeacherName)) {
+      errors.push(`ნაბიჯი 3 — მასწავლებელი „${teacherName}“ ორჯერ არის დამატებული. დატოვე მხოლოდ ერთი ჩანაწერი.`);
+    }
+    teacherNames.add(normalizedTeacherName);
+
+    if (!Array.isArray(teacher.assignments) || teacher.assignments.length === 0) {
+      errors.push(`ნაბიჯი 3 — ${teacherName} მასწავლებელს არც ერთი საგანი არ აქვს დამატებული.`);
+    }
+
+    (teacher.assignments || []).forEach((assignment) => {
+      if (!assignment.name?.trim()) errors.push(`ნაბიჯი 3 — ${teacherName} მასწავლებელს დამატებული აქვს უსახელო საგანი.`);
+      if (!Array.isArray(assignment.classes) || assignment.classes.length === 0) {
+        errors.push(`ნაბიჯი 3 — ${teacherName} მასწავლებლის საგანთან „${assignment.name}“ არც ერთი კლასი არ არის მონიშნული.`);
+      }
+      (assignment.classes || []).forEach((classNameValue) => {
+        const classItem = state.classes.find((item) => item.name === classNameValue);
+        if (!classItem) {
+          errors.push(`ნაბიჯი 3 — ${teacherName} მასწავლებელთან მითითებული კლასი „${classNameValue}“ აღარ არსებობს.`);
+        } else if (!classItem.subjects.some((subject) => subject.name.toLowerCase() === assignment.name.toLowerCase())) {
+          errors.push(
+            `ნაბიჯი 3 — ${teacherName} მონიშნულია საგანზე „${assignment.name}“ ${classNameValue} კლასში, მაგრამ ამ კლასს ეს საგანი არ აქვს.`,
+          );
+        }
+      });
+    });
+
     const availability = migrateTeacherAvailability(teacher).availability;
     if (availability.length === 0) {
-      errors.push(`${teacher.name} მასწავლებელს თავისუფალი დრო არ აქვს მითითებული.`);
+      errors.push(`ნაბიჯი 3 — ${teacherName} მასწავლებელს თავისუფალი დრო არ აქვს მითითებული.`);
     }
     if (availability.some((item) => !DAYS.includes(item.day) || !isValidTime(item.from) || !isValidTime(item.to))) {
-      errors.push(`${teacher.name} მასწავლებლის თავისუფალი დრო არასწორია.`);
+      errors.push(`ნაბიჯი 3 — ${teacherName} მასწავლებლის ერთ-ერთი თავისუფალი დრო არასწორია. გამოიყენე ფორმატი 09:00.`);
     }
-    if (availability.some((item) => timeToMinutes(item.from) >= timeToMinutes(item.to))) {
-      errors.push(`${teacher.name} მასწავლებლის თავისუფალი დროის დასაწყისი დასრულებაზე ადრე უნდა იყოს.`);
+    if (
+      availability.some(
+        (item) => isValidTime(item.from) && isValidTime(item.to) && timeToMinutes(item.from) >= timeToMinutes(item.to),
+      )
+    ) {
+      errors.push(`ნაბიჯი 3 — ${teacherName} მასწავლებლის თავისუფალი დროის დასაწყისი დასრულებაზე ადრე უნდა იყოს.`);
     }
   }
 
+  const classNames = new Set();
   for (const classItem of state.classes) {
-    const weeklyLessonTotal = classItem.subjects.reduce((total, subject) => total + subject.weeklyLessons, 0);
+    const weeklyLessonTotal = (classItem.subjects || []).reduce((total, subject) => total + subject.weeklyLessons, 0);
+    const normalizedClassName = classItem.name.toLowerCase();
 
-    if (!classItem.minLessonsPerDay || !classItem.maxLessonsPerDay || classItem.minLessonsPerDay > classItem.maxLessonsPerDay) {
-      errors.push(`${classItem.name} კლასისთვის დღიური მინ/მაქს ლიმიტი არასწორია.`);
+    if (classNames.has(normalizedClassName)) {
+      errors.push(`ნაბიჯი 1 — კლასი „${classItem.name}“ ორჯერ არის დამატებული.`);
+    }
+    classNames.add(normalizedClassName);
+
+    if (!Array.isArray(classItem.subjects) || classItem.subjects.length === 0) {
+      errors.push(`ნაბიჯი 1 — ${classItem.name} კლასს არც ერთი საგანი არ აქვს დამატებული.`);
     }
 
-    if (weeklyLessonTotal < classItem.minLessonsPerDay * DAYS.length) {
+    for (const subject of classItem.subjects || []) {
+      if (!subject.name?.trim()) errors.push(`ნაბიჯი 1 — ${classItem.name} კლასში დამატებულია უსახელო საგანი.`);
+      if (!Number.isInteger(subject.weeklyLessons) || subject.weeklyLessons < 1 || subject.weeklyLessons > 20) {
+        errors.push(`ნაბიჯი 1 — ${classItem.name} კლასის საგანს „${subject.name}“ კვირეული რაოდენობა 1-დან 20-მდე უნდა ჰქონდეს.`);
+      }
+    }
+
+    if (
+      !Number.isInteger(classItem.minLessonsPerDay) ||
+      !Number.isInteger(classItem.maxLessonsPerDay) ||
+      classItem.minLessonsPerDay < 1 ||
+      classItem.maxLessonsPerDay > 10 ||
+      classItem.minLessonsPerDay > classItem.maxLessonsPerDay
+    ) {
+      errors.push(`ნაბიჯი 1 — ${classItem.name} კლასის დღიური მინიმუმი და მაქსიმუმი არასწორია. მიუთითე 1-დან 10-მდე.`);
+    }
+
+    if (Number.isFinite(weeklyLessonTotal) && weeklyLessonTotal < classItem.minLessonsPerDay * DAYS.length) {
       errors.push(
-        `${classItem.name} კლასს კვირაში ${weeklyLessonTotal} გაკვეთილი აქვს, მაგრამ დღიური მინიმუმისთვის საჭიროა მინიმუმ ${classItem.minLessonsPerDay * DAYS.length}.`,
+        `ნაბიჯი 1 — ${classItem.name} კლასს კვირაში ${weeklyLessonTotal} გაკვეთილი აქვს. დღიური მინიმუმის შესასრულებლად საჭიროა სულ მცირე ${classItem.minLessonsPerDay * DAYS.length}.`,
       );
     }
 
-    if (weeklyLessonTotal > classItem.maxLessonsPerDay * DAYS.length) {
+    if (Number.isFinite(weeklyLessonTotal) && weeklyLessonTotal > classItem.maxLessonsPerDay * DAYS.length) {
       errors.push(
-        `${classItem.name} კლასს კვირაში ${weeklyLessonTotal} გაკვეთილი აქვს, მაგრამ დღიური მაქსიმუმით ეტევა მაქსიმუმ ${classItem.maxLessonsPerDay * DAYS.length}.`,
+        `ნაბიჯი 1 — ${classItem.name} კლასს კვირაში ${weeklyLessonTotal} გაკვეთილი აქვს, მაგრამ დღიურ მაქსიმუმში მხოლოდ ${classItem.maxLessonsPerDay * DAYS.length} ეტევა.`,
       );
     }
 
     if (!settings.activeShifts.includes(classItem.shift)) {
-      errors.push(`${classItem.name} კლასს მითითებული აქვს გამორთული სმენა.`);
+      errors.push(`ნაბიჯი 1 — ${classItem.name} კლასს არჩეული აქვს გამორთული სმენა. შეცვალე კლასი ან ჩართე ეს სმენა ნაბიჯი 2-ში.`);
     }
 
-    for (const subject of classItem.subjects) {
-      const hasTeacher = state.teachers.some(
+    for (const subject of classItem.subjects || []) {
+      if (!subject.name?.trim() || !Number.isInteger(subject.weeklyLessons) || subject.weeklyLessons < 1) continue;
+      const eligibleTeachers = state.teachers.filter(
         (teacher) =>
-          teacher.assignments.some(
+          (teacher.assignments || []).some(
             (assignment) =>
-              assignment.name.toLowerCase() === subject.name.toLowerCase() && assignment.classes.includes(classItem.name),
+              assignment.name?.toLowerCase() === subject.name.toLowerCase() &&
+              (assignment.classes || []).includes(classItem.name),
           ),
       );
-      if (!hasTeacher) errors.push(`${classItem.name} კლასისთვის საგანს "${subject.name}" არ ჰყავს შესაბამისი მასწავლებელი.`);
+      if (eligibleTeachers.length === 0) {
+        errors.push(`ნაბიჯი 3 — ${classItem.name} კლასის საგანს „${subject.name}“ შესაბამისი მასწავლებელი არ ჰყავს.`);
+        continue;
+      }
+
+      const canCheckSlots =
+        settings.activeShifts.includes(classItem.shift) &&
+        isValidTime(settings.shiftStarts[classItem.shift]) &&
+        Number.isFinite(settings.lessonDuration) &&
+        settings.lessonDuration > 0 &&
+        Number.isInteger(classItem.maxLessonsPerDay) &&
+        classItem.maxLessonsPerDay > 0;
+      if (!canCheckSlots) continue;
+
+      const slots = buildSlots(classItem, settings);
+      const availableDays = DAYS.filter((day) =>
+        slots.some((slot) => eligibleTeachers.some((teacher) => teacherCanTeach(teacher, classItem, subject.name, day, slot))),
+      );
+      const possibleSlotCount = DAYS.reduce(
+        (total, day) =>
+          total +
+          slots.filter((slot) =>
+            eligibleTeachers.some((teacher) => teacherCanTeach(teacher, classItem, subject.name, day, slot)),
+          ).length,
+        0,
+      );
+
+      if (subject.weeklyLessons <= DAYS.length && availableDays.length < subject.weeklyLessons) {
+        errors.push(
+          `ნაბიჯი 3 — ${classItem.name} კლასის „${subject.name}“ კვირაში ${subject.weeklyLessons}-ჯერ უნდა ჩატარდეს, მაგრამ შესაბამის მასწავლებელს მხოლოდ ${availableDays.length} შესაძლო დღე აქვს.`,
+        );
+      } else if (possibleSlotCount < subject.weeklyLessons) {
+        errors.push(
+          `ნაბიჯი 3 — ${classItem.name} კლასის „${subject.name}“-ისთვის საჭიროა ${subject.weeklyLessons} გაკვეთილი, მაგრამ მასწავლებლების თავისუფალ დროში მხოლოდ ${possibleSlotCount} შესაძლო საათი მოიძებნა.`,
+        );
+      }
     }
   }
 
-  return errors;
+  return Array.from(new Set(errors));
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function showValidationError(title, details, focusId = null) {
+  showMessages([
+    {
+      type: "error",
+      title,
+      text: "შეასწორე ჩამოთვლილი მონაცემები და სცადე თავიდან.",
+      details: Array.from(new Set(details)),
+    },
+  ]);
+  if (focusId && $(focusId)) $(focusId).focus();
 }
 
 function showMessages(messages) {
   $("messages").innerHTML = messages
-    .map((message) => `<div class="message ${message.type}">${message.text}</div>`)
+    .map(
+      (message) => `
+        <div class="message ${message.type}">
+          ${message.title ? `<strong class="message-title">${escapeHtml(message.title)}</strong>` : ""}
+          ${message.text ? `<p>${escapeHtml(message.text)}</p>` : ""}
+          ${
+            Array.isArray(message.details) && message.details.length > 0
+              ? `<ul>${message.details.map((detail) => `<li>${escapeHtml(detail)}</li>`).join("")}</ul>`
+              : ""
+          }
+        </div>
+      `,
+    )
     .join("");
 }
 
@@ -1271,115 +1840,6 @@ function renderSchedule(schedule) {
     .join("");
 }
 
-function seedData() {
-  $("shift2Enabled").checked = true;
-  $("shift3Enabled").checked = false;
-  updateShiftAvailability();
-
-  state.classes = [
-    {
-      name: "1ა",
-      grade: "1",
-      section: "ა",
-      shift: "1",
-      minLessonsPerDay: 4,
-      maxLessonsPerDay: 6,
-      subjects: [
-        { name: "ქართული", weeklyLessons: 7 },
-        { name: "მათემატიკა", weeklyLessons: 7 },
-        { name: "ინგლისური", weeklyLessons: 6 },
-      ],
-    },
-    {
-      name: "1ბ",
-      grade: "1",
-      section: "ბ",
-      shift: "1",
-      minLessonsPerDay: 4,
-      maxLessonsPerDay: 6,
-      subjects: [
-        { name: "ქართული", weeklyLessons: 7 },
-        { name: "მათემატიკა", weeklyLessons: 7 },
-        { name: "ინგლისური", weeklyLessons: 6 },
-      ],
-    },
-    {
-      name: "2ა",
-      grade: "2",
-      section: "ა",
-      shift: "1",
-      minLessonsPerDay: 4,
-      maxLessonsPerDay: 6,
-      subjects: [
-        { name: "ქართული", weeklyLessons: 6 },
-        { name: "მათემატიკა", weeklyLessons: 6 },
-        { name: "ინგლისური", weeklyLessons: 4 },
-        { name: "ბუნება", weeklyLessons: 4 },
-      ],
-    },
-    {
-      name: "2ბ",
-      grade: "2",
-      section: "ბ",
-      shift: "1",
-      minLessonsPerDay: 4,
-      maxLessonsPerDay: 6,
-      subjects: [
-        { name: "ქართული", weeklyLessons: 6 },
-        { name: "მათემატიკა", weeklyLessons: 6 },
-        { name: "ინგლისური", weeklyLessons: 4 },
-        { name: "ბუნება", weeklyLessons: 4 },
-      ],
-    },
-    {
-      name: "3ა",
-      grade: "3",
-      section: "ა",
-      shift: "2",
-      minLessonsPerDay: 4,
-      maxLessonsPerDay: 6,
-      subjects: [
-        { name: "ქართული", weeklyLessons: 5 },
-        { name: "მათემატიკა", weeklyLessons: 5 },
-        { name: "ინგლისური", weeklyLessons: 4 },
-        { name: "ბუნება", weeklyLessons: 3 },
-        { name: "ისტორია", weeklyLessons: 3 },
-      ],
-    },
-    {
-      name: "3ბ",
-      grade: "3",
-      section: "ბ",
-      shift: "2",
-      minLessonsPerDay: 4,
-      maxLessonsPerDay: 6,
-      subjects: [
-        { name: "ქართული", weeklyLessons: 5 },
-        { name: "მათემატიკა", weeklyLessons: 5 },
-        { name: "ინგლისური", weeklyLessons: 4 },
-        { name: "ბუნება", weeklyLessons: 3 },
-        { name: "ისტორია", weeklyLessons: 3 },
-      ],
-    },
-  ];
-  state.teachers = [
-    { name: "ნინო გიორგაძე", assignments: [{ name: "ქართული", classes: ["1ა"] }, { name: "მათემატიკა", classes: ["1ა"] }, { name: "ინგლისური", classes: ["1ა"] }], availability: DAYS.map((day) => ({ day, from: "09:00", to: "13:30" })) },
-    { name: "თამარ ლომიძე", assignments: [{ name: "ქართული", classes: ["1ბ"] }, { name: "მათემატიკა", classes: ["1ბ"] }, { name: "ინგლისური", classes: ["1ბ"] }], availability: DAYS.map((day) => ({ day, from: "09:00", to: "13:30" })) },
-    { name: "ლაშა კობახიძე", assignments: [{ name: "ქართული", classes: ["2ა"] }, { name: "მათემატიკა", classes: ["2ა"] }, { name: "ინგლისური", classes: ["2ა"] }, { name: "ბუნება", classes: ["2ა"] }], availability: DAYS.map((day) => ({ day, from: "09:00", to: "13:30" })) },
-    { name: "ეკა ბერიძე", assignments: [{ name: "ქართული", classes: ["2ბ"] }, { name: "მათემატიკა", classes: ["2ბ"] }, { name: "ინგლისური", classes: ["2ბ"] }, { name: "ბუნება", classes: ["2ბ"] }], availability: DAYS.map((day) => ({ day, from: "09:00", to: "13:30" })) },
-    { name: "მარიამ ჩიქოვანი", assignments: [{ name: "ქართული", classes: ["3ა"] }, { name: "მათემატიკა", classes: ["3ა"] }, { name: "ინგლისური", classes: ["3ა"] }, { name: "ბუნება", classes: ["3ა"] }, { name: "ისტორია", classes: ["3ა"] }], availability: DAYS.map((day) => ({ day, from: "14:00", to: "18:30" })) },
-    { name: "გიორგი მაისურაძე", assignments: [{ name: "ქართული", classes: ["3ბ"] }, { name: "მათემატიკა", classes: ["3ბ"] }, { name: "ინგლისური", classes: ["3ბ"] }, { name: "ბუნება", classes: ["3ბ"] }, { name: "ისტორია", classes: ["3ბ"] }], availability: DAYS.map((day) => ({ day, from: "14:00", to: "18:30" })) },
-    { name: "ანა ქავთარაძე", assignments: [{ name: "ინგლისური", classes: ["1ა", "1ბ", "2ა", "2ბ"] }, { name: "ქართული", classes: ["3ა", "3ბ"] }], availability: [...DAYS.map((day) => ({ day, from: "09:00", to: "12:30" })), ...DAYS.map((day) => ({ day, from: "15:00", to: "18:30" }))] },
-    { name: "სოფიო აბაშიძე", assignments: [{ name: "ისტორია", classes: ["3ა", "3ბ"] }], availability: ["ორშაბათი", "ოთხშაბათი", "პარასკევი"].map((day) => ({ day, from: "14:00", to: "18:30" })) },
-  ];
-  setClassEditingMode(null);
-  setTeacherEditingMode(null);
-  renderClasses();
-  renderTeachers();
-  showMessages([{ type: "ok", text: "სატესტო მონაცემები ჩაიტვირთა." }]);
-  persistDraft();
-}
-
 document.querySelectorAll(".step-button").forEach((button) => {
   button.addEventListener("click", () => {
     document.querySelectorAll(".step-button").forEach((item) => item.classList.remove("active"));
@@ -1395,13 +1855,8 @@ $("addTeacherBtn").addEventListener("click", addTeacher);
 $("cancelClassEditBtn").addEventListener("click", resetClassForm);
 $("cancelTeacherEditBtn").addEventListener("click", resetTeacherForm);
 $("generateBtn").addEventListener("click", generateSchedule);
-$("seedBtn").addEventListener("click", seedData);
 $("clearAllBtn").addEventListener("click", clearAllData);
 $("addSubjectBtn").addEventListener("click", () => addSubject($("subjectDraft").value));
-$("copySubjectsBtn").addEventListener("click", copySubjectsFromClass);
-$("clearSubjectsBtn").addEventListener("click", clearSelectedSubjects);
-$("selectAllBulkClassesBtn").addEventListener("click", toggleAllBulkClasses);
-$("addBulkSubjectBtn").addEventListener("click", addSubjectToSelectedClasses);
 $("addTeacherSubjectBtn").addEventListener("click", () => addTeacherSubject($("teacherSubjectDraft").value));
 $("addTeacherAvailabilityBtn").addEventListener("click", addTeacherAvailability);
 $("classMinLessons").addEventListener("input", () => {
@@ -1501,18 +1956,6 @@ $("teacherAvailabilityList").addEventListener("click", (event) => {
   persistDraft();
 });
 
-$("bulkClassOptions").addEventListener("change", (event) => {
-  if (!event.target.matches("[data-bulk-class]")) return;
-
-  if (event.target.checked) {
-    if (!state.selectedBulkClasses.includes(event.target.value)) state.selectedBulkClasses.push(event.target.value);
-  } else {
-    state.selectedBulkClasses = state.selectedBulkClasses.filter((className) => className !== event.target.value);
-  }
-  renderBulkClassOptions();
-  persistDraft();
-});
-
 $("sectionShiftOptions").addEventListener("change", (event) => {
   const section = event.target.dataset.sectionShift;
   if (section === undefined) return;
@@ -1576,12 +2019,17 @@ $("variantPicker").addEventListener("click", (event) => {
     return;
   }
 
+  if (event.target.dataset.loadMoreVariants === "true") {
+    loadMoreVariants();
+    return;
+  }
+
   if (event.target.dataset.keepVariant === "true") {
     keepSelectedVariant();
   }
 });
 
-const restoredDraft = restoreSavedDraft();
+restoreSavedDraft();
 
 renderClasses();
 renderTeachers();
@@ -1597,8 +2045,6 @@ setTeacherEditingMode(state.editingTeacherIndex);
 if (state.generatedVariants.length > 0) {
   const variantIndex = Math.min(state.selectedVariantIndex, state.generatedVariants.length - 1);
   showVariant(variantIndex);
-} else if (restoredDraft) {
-  showMessages([{ type: "ok", text: "შენახული სამუშაო აღდგა." }]);
 }
 
 persistDraft();
